@@ -1,0 +1,117 @@
+import type { DashboardSource } from "@/types/dashboard";
+
+export const mockSources: DashboardSource[] = [
+  {
+    id: "cape-may-weather",
+    kind: "weather-location",
+    providerKey: "open-meteo",
+    label: "Cape May Point, NJ",
+    latitude: 38.9376,
+    longitude: -74.9691,
+    timezone: "America/New_York",
+    settings: {},
+  },
+  {
+    id: "cape-may-tides",
+    kind: "tide-station",
+    providerKey: "noaa-coops",
+    label: "Cape May, NJ — NOAA 8536110",
+    latitude: 38.9683,
+    longitude: -74.9603,
+    timezone: "America/New_York",
+    externalId: "8536110",
+    settings: {
+      datum: "MLLW",
+      units: "english",
+      distanceMiles: 4.3,
+    },
+  },
+  {
+    id: "cape-may-marine",
+    kind: "marine-location",
+    providerKey: "open-meteo-marine",
+    label: "Cape May Offshore",
+    latitude: 38.91,
+    longitude: -74.89,
+    timezone: "America/New_York",
+    settings: {
+      gridDistanceMiles: 1.8,
+    },
+  },
+  {
+    id: "cape-may-astronomy",
+    kind: "astronomy-location",
+    providerKey: "astronomy-engine",
+    label: "Cape May Point, NJ",
+    latitude: 38.9376,
+    longitude: -74.9691,
+    timezone: "America/New_York",
+    settings: {},
+  },
+];
+
+export const mockForecast = {
+  weather: {
+    temperatureF: 74,
+    feelsLikeF: 75,
+    condition: "Partly cloudy",
+    rainChancePercent: 20,
+    hourly: [
+      { time: "12 PM", temperatureF: 74, rainChancePercent: 10 },
+      { time: "1 PM", temperatureF: 75, rainChancePercent: 15 },
+      { time: "2 PM", temperatureF: 76, rainChancePercent: 20 },
+      { time: "3 PM", temperatureF: 75, rainChancePercent: 25 },
+      { time: "4 PM", temperatureF: 74, rainChancePercent: 30 },
+    ],
+    daily: [
+      { day: "Today", highF: 76, lowF: 65, condition: "Partly cloudy" },
+      { day: "Thu", highF: 74, lowF: 64, condition: "Showers" },
+      { day: "Fri", highF: 78, lowF: 66, condition: "Mostly sunny" },
+      { day: "Sat", highF: 80, lowF: 68, condition: "Sunny" },
+    ],
+  },
+  wind: {
+    speedMph: 9,
+    gustMph: 15,
+    directionDegrees: 65,
+    directionLabel: "ENE",
+    hourly: [
+      { time: "12 PM", speedMph: 9, gustMph: 15, direction: "ENE" },
+      { time: "1 PM", speedMph: 10, gustMph: 16, direction: "E" },
+      { time: "2 PM", speedMph: 11, gustMph: 18, direction: "E" },
+      { time: "3 PM", speedMph: 10, gustMph: 17, direction: "ESE" },
+    ],
+  },
+  tides: {
+    nextHigh: { time: "2:46 PM", heightFt: 4.7 },
+    nextLow: { time: "9:12 PM", heightFt: 0.3 },
+    status: "Rising",
+    minutesUntilTurn: 134,
+    stationName: "Cape May, NJ",
+    stationId: "8536110",
+    distanceMiles: 4.3,
+    events: [
+      { type: "Low", time: "8:21 AM", heightFt: 0.4 },
+      { type: "High", time: "2:46 PM", heightFt: 4.7 },
+      { type: "Low", time: "9:12 PM", heightFt: 0.3 },
+      { type: "High", time: "3:05 AM", heightFt: 4.4 },
+    ],
+  },
+  marine: {
+    waveHeightFt: 2.1,
+    waveDirection: "SE",
+    waveDirectionDegrees: 135,
+    wavePeriodSeconds: 7,
+    swellHeightFt: 1.6,
+    swellDirection: "ESE",
+    swellPeriodSeconds: 8,
+  },
+  astronomy: {
+    phaseName: "Waning Gibbous",
+    illuminationPercent: 72,
+    moonrise: "10:41 PM",
+    moonset: "11:16 AM",
+    sunrise: "6:03 AM",
+    sunset: "8:08 PM",
+  },
+};
