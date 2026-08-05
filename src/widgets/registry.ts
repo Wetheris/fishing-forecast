@@ -81,6 +81,8 @@ export const widgetDefinitions: WidgetDefinition[] = [
     sourceKind: "weather-location",
     defaultTitle: "Conditions",
     defaultSettings: {
+      showIcon: true,
+      showText: true,
       showSourceLabel: true,
       showLastUpdated: false,
     },
@@ -107,7 +109,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     sourceKind: "weather-location",
     defaultTitle: "Hourly Forecast",
     defaultSettings: {
+      displayMode: "cards",
       hours: 5,
+      unit: "fahrenheit",
+      showPointLabels: true,
+      showRainChance: false,
       showSourceLabel: true,
       showLastUpdated: false,
     },
@@ -231,7 +237,10 @@ export const widgetDefinitions: WidgetDefinition[] = [
     sourceKind: "tide-station",
     defaultTitle: "Tide Timeline",
     defaultSettings: {
+      displayMode: "list",
       heightUnit: "feet",
+      showCurrentMarker: true,
+      showHighLowLabels: true,
       showSourceLabel: true,
     },
     defaultPlacement: placements(timelineDesktop, timelineMobile),
@@ -307,6 +316,9 @@ export const widgetDefinitions: WidgetDefinition[] = [
     sourceKind: "astronomy-location",
     defaultTitle: "Moon Phase",
     defaultSettings: {
+      showMoonGraphic: true,
+      showPhaseName: true,
+      showIllumination: true,
       showSourceLabel: true,
     },
     defaultPlacement: placements(metricDesktop, metricMobile),

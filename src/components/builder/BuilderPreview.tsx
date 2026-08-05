@@ -12,6 +12,9 @@ import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
 
 export type PreviewZoom = "fit" | 0.5 | 0.75 | 1;
 
+const FIT_PADDING = 72;
+const SCALE_PRECISION = 1000;
+
 export function BuilderPreview({
   layout,
   widgets,
@@ -51,37 +54,78 @@ export function BuilderPreview({
 
   useEffect(() => {
     const element = stageRef.current;
+
     if (!element) {
       return;
     }
 
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
-        return;
-      }
-      setStageSize({
-        width: entry.contentRect.width,
-        height: entry.contentRect.height,
+    let animationFrame = 0;
+
+    const measure = () => {
+      const nextWidth = element.clientWidth;
+      const nextHeight = element.clientHeight;
+
+      setStageSize((current) => {
+        if (
+          Math.abs(current.width - nextWidth) < 2 &&
+          Math.abs(current.height - nextHeight) < 2
+        ) {
+          return current;
+        }
+
+        return {
+          width: nextWidth,
+          height: nextHeight,
+        };
       });
+    };
+
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(measure);
     });
 
     observer.observe(element);
-    return () => observer.disconnect();
+    measure();
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
   }, []);
 
-  const fitScale = Math.min(
+  const availableWidth = Math.max(
     1,
-    Math.max(
-      0.2,
-      Math.min(
-        (stageSize.width - 64) / layout.viewport.width,
-        (stageSize.height - 64) / layout.viewport.height,
-      ),
-    ),
+    stageSize.width - FIT_PADDING,
+  );
+  const availableHeight = Math.max(
+    1,
+    stageSize.height - FIT_PADDING,
   );
 
+  const rawFitScale = Math.min(
+    1,
+    availableWidth / layout.viewport.width,
+    availableHeight / layout.viewport.height,
+  );
+
+  /*
+   * Flooring the fit scale prevents tiny sub-pixel measurement
+   * differences from repeatedly moving the canvas by a fraction of a
+   * pixel.
+   */
+  const fitScale =
+    Math.floor(
+      Math.max(0.2, rawFitScale) * SCALE_PRECISION,
+    ) / SCALE_PRECISION;
+
   const scale = zoom === "fit" ? fitScale : zoom;
+  const displayedWidth = Math.round(
+    layout.viewport.width * scale,
+  );
+  const displayedHeight = Math.round(
+    layout.viewport.height * scale,
+  );
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -118,6 +162,7 @@ export function BuilderPreview({
             value={String(zoom)}
             onChange={(event) => {
               const value = event.target.value;
+
               onZoomChange(
                 value === "fit"
                   ? "fit"
@@ -147,14 +192,24 @@ export function BuilderPreview({
 
       <div
         ref={stageRef}
-        className="builder-scrollbar relative min-h-[520px] flex-1 overflow-auto bg-[#e8eef0]"
+        className={[
+          "builder-scrollbar relative min-h-[520px] flex-1 bg-[#e8eef0]",
+          zoom === "fit"
+            ? "overflow-hidden"
+            : "overflow-auto",
+        ].join(" ")}
+        style={{
+          scrollbarGutter: "stable both-edges",
+          overflowAnchor: "none",
+          overscrollBehavior: "contain",
+        }}
       >
-        <div className="flex min-h-full min-w-full items-start justify-center p-8">
+        <div className="flex min-h-full min-w-full items-start justify-center p-9">
           <div
             className="shrink-0"
             style={{
-              width: layout.viewport.width * scale,
-              height: layout.viewport.height * scale,
+              width: displayedWidth,
+              height: displayedHeight,
             }}
           >
             <div
@@ -163,6 +218,7 @@ export function BuilderPreview({
                 width: layout.viewport.width,
                 height: layout.viewport.height,
                 transform: `scale(${scale})`,
+                transformOrigin: "top left",
               }}
             >
               <DashboardCanvas

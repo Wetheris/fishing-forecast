@@ -105,14 +105,33 @@ export function DashboardCanvas({
       nextLayout.map((item) => [item.i, item]),
     );
 
-    onPlacementsChange(
-      layout.placements.map((placement) => {
-        const next = nextById.get(placement.widgetId);
+    const nextPlacements = layout.placements.map(
+      (placement) => {
+        const next = nextById.get(
+          placement.widgetId,
+        );
+
         return next
           ? toPlacement(next, placement)
           : placement;
-      }),
+      },
     );
+
+    /*
+     * React Grid Layout may report the same layout again after a scale
+     * or container measurement changes. Avoiding a redundant parent
+     * state update prevents an unnecessary render/measurement loop.
+     */
+    if (
+      placementsEqual(
+        layout.placements,
+        nextPlacements,
+      )
+    ) {
+      return;
+    }
+
+    onPlacementsChange(nextPlacements);
   }
 
   return (
@@ -142,7 +161,10 @@ export function DashboardCanvas({
         gridConfig={{
           cols: layout.grid.columns,
           rowHeight: layout.grid.rowHeight,
-          margin: [layout.grid.gap, layout.grid.gap],
+          margin: [
+            layout.grid.gap,
+            layout.grid.gap,
+          ],
           containerPadding: [
             layout.grid.padding,
             layout.grid.padding,
@@ -166,8 +188,10 @@ export function DashboardCanvas({
       >
         {visiblePlacements.map((placement) => {
           const widget = widgets.find(
-            (item) => item.id === placement.widgetId,
+            (item) =>
+              item.id === placement.widgetId,
           );
+
           if (!widget) {
             return (
               <div key={placement.widgetId}>
@@ -178,7 +202,8 @@ export function DashboardCanvas({
 
           const source =
             sources.find(
-              (item) => item.id === widget.sourceId,
+              (item) =>
+                item.id === widget.sourceId,
             ) ?? sources[0];
 
           if (!source) {
@@ -194,7 +219,9 @@ export function DashboardCanvas({
               <WidgetShell
                 widget={widget}
                 source={source}
-                weatherState={weatherStates[source.id]}
+                weatherState={
+                  weatherStates[source.id]
+                }
                 mode={mode}
                 selected={
                   mode === "edit" &&
@@ -207,7 +234,9 @@ export function DashboardCanvas({
                 <WidgetRenderer
                   widget={widget}
                   source={source}
-                  weatherState={weatherStates[source.id]}
+                  weatherState={
+                    weatherStates[source.id]
+                  }
                 />
               </WidgetShell>
             </div>
@@ -233,4 +262,32 @@ function toPlacement(
     maxW: item.maxW ?? previous.maxW,
     maxH: item.maxH ?? previous.maxH,
   };
+}
+
+function placementsEqual(
+  first: WidgetPlacement[],
+  second: WidgetPlacement[],
+): boolean {
+  if (first.length !== second.length) {
+    return false;
+  }
+
+  return first.every((placement, index) => {
+    const comparison = second[index];
+
+    return (
+      comparison !== undefined &&
+      placement.widgetId ===
+        comparison.widgetId &&
+      placement.x === comparison.x &&
+      placement.y === comparison.y &&
+      placement.w === comparison.w &&
+      placement.h === comparison.h &&
+      placement.minW === comparison.minW &&
+      placement.minH === comparison.minH &&
+      placement.maxW === comparison.maxW &&
+      placement.maxH === comparison.maxH &&
+      placement.hidden === comparison.hidden
+    );
+  });
 }
