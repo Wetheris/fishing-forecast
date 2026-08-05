@@ -1,91 +1,297 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type {
-  DashboardSource,
+  DashboardLayout,
+  FishingDashboard,
+  LayoutDevice,
   WidgetInstance,
-  WidgetSize,
+  WidgetPlacement,
 } from "@/types/dashboard";
 import type { WeatherLocationSelection } from "@/types/geocoding";
-import { mockSources } from "@/lib/mock-data";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
-  categoryLabels,
-  categoryOrder,
-  widgetDefinitions,
-} from "@/widgets/registry";
+  addWidgetToLayout,
+  applyPreset,
+  autoArrangeLayout,
+  createInitialDashboard,
+  createLayoutFromPreset,
+  createMobileLayoutFromDesktop,
+  createWidgetInstance,
+  getRecommendedPreset,
+  layoutPresets,
+  normalizePlacementsForLayout,
+} from "@/lib/dashboard-layouts";
 import type { WidgetDefinition } from "@/widgets/types";
-import { DashboardWidgetCard } from "@/components/dashboard/DashboardWidgetCard";
-import { WeatherSourceEditor } from "@/components/sources/WeatherSourceEditor";
-
-const initialWidgets: WidgetInstance[] = [
-  {
-    id: "initial-temperature",
-    widgetKey: "current-temperature",
-    category: "weather",
-    sourceId: "cape-may-weather",
-    title: "Temperature",
-    position: 0,
-    size: "small",
-    settings: {},
-  },
-  {
-    id: "initial-wind-speed",
-    widgetKey: "wind-speed",
-    category: "wind",
-    sourceId: "cape-may-weather",
-    title: "Wind Speed",
-    position: 1,
-    size: "small",
-    settings: {},
-  },
-  {
-    id: "initial-next-high-tide",
-    widgetKey: "next-high-tide",
-    category: "tides",
-    sourceId: "cape-may-tides",
-    title: "Next High Tide",
-    position: 2,
-    size: "small",
-    settings: {},
-  },
-];
+import {
+  BuilderToolbar,
+  type BuilderPanel,
+} from "@/components/builder/BuilderToolbar";
+import {
+  BuilderPreview,
+  type PreviewZoom,
+} from "@/components/builder/BuilderPreview";
 
 export function DashboardBuilder() {
-  const [dashboardName, setDashboardName] = useState(
-    "Cape May Fishing",
+  const [dashboard, setDashboard] =
+    useState<FishingDashboard>(() =>
+      createInitialDashboard(),
+    );
+  const [activeLayoutId, setActiveLayoutId] =
+    useState(dashboard.layouts[0].id);
+  const [panel, setPanel] =
+    useState<BuilderPanel>("layouts");
+  const [selectedWidgetId, setSelectedWidgetId] =
+    useState<string>();
+  const [mode, setMode] =
+    useState<"edit" | "view">("edit");
+  const [zoom, setZoom] =
+    useState<PreviewZoom>("fit");
+  const [showGrid, setShowGrid] = useState(true);
+
+  const weatherStates = useWeatherSources(
+    dashboard.sources,
   );
-  const [sources, setSources] =
-    useState<DashboardSource[]>(mockSources);
-  const [widgets, setWidgets] =
-    useState<WidgetInstance[]>(initialWidgets);
 
-  const weatherStates = useWeatherSources(sources);
+  const activeLayout =
+    dashboard.layouts.find(
+      (layout) => layout.id === activeLayoutId,
+    ) ?? dashboard.layouts[0];
 
-  const weatherSource = sources.find(
-    (source) => source.kind === "weather-location",
+  const selectedWidget = dashboard.widgets.find(
+    (widget) => widget.id === selectedWidgetId,
   );
 
-  const orderedWidgets = useMemo(
-    () =>
-      [...widgets].sort(
-        (first, second) =>
-          first.position - second.position,
+  const selectedPlacement =
+    activeLayout?.placements.find(
+      (placement) =>
+        placement.widgetId === selectedWidgetId,
+    );
+
+  function updateDashboardName(name: string) {
+    setDashboard((current) => ({
+      ...current,
+      name,
+    }));
+  }
+
+  function selectWidget(widgetId: string) {
+    setSelectedWidgetId(widgetId || undefined);
+    if (widgetId) {
+      setPanel("selected");
+    }
+  }
+
+  function updateActiveLayout(
+    updater: (
+      layout: DashboardLayout,
+    ) => DashboardLayout,
+  ) {
+    setDashboard((current) => ({
+      ...current,
+      layouts: current.layouts.map((layout) =>
+        layout.id === activeLayout.id
+          ? updater(layout)
+          : layout,
       ),
-    [widgets],
-  );
+    }));
+  }
+
+  function updatePlacements(
+    placements: WidgetPlacement[],
+  ) {
+    updateActiveLayout((layout) => ({
+      ...layout,
+      placements,
+    }));
+  }
+
+  function updateLayout(
+    updates: Partial<DashboardLayout>,
+  ) {
+    updateActiveLayout((layout) => {
+      const next = {
+        ...layout,
+        ...updates,
+      };
+      return {
+        ...next,
+        placements: normalizePlacementsForLayout(
+          next,
+          layout.placements,
+        ),
+      };
+    });
+  }
+
+  function applyLayoutPreset(presetKey: string) {
+    const preset = layoutPresets.find(
+      (item) => item.key === presetKey,
+    );
+    if (!preset) {
+      return;
+    }
+    updateActiveLayout((layout) =>
+      applyPreset(layout, preset),
+    );
+  }
+
+  function createLayout(device: LayoutDevice) {
+    if (
+      dashboard.layouts.some(
+        (layout) => layout.device === device,
+      )
+    ) {
+      return;
+    }
+
+    const layout =
+      device === "mobile"
+        ? createMobileLayoutFromDesktop(
+            dashboard.widgets,
+          )
+        : createLayoutFromPreset(
+            getRecommendedPreset(device),
+            dashboard.widgets,
+          );
+
+    setDashboard((current) => ({
+      ...current,
+      layouts: [...current.layouts, layout],
+    }));
+    setActiveLayoutId(layout.id);
+    setPanel("layouts");
+    setZoom("fit");
+  }
+
+  function deleteLayout(layoutId: string) {
+    const remaining = dashboard.layouts.filter(
+      (layout) => layout.id !== layoutId,
+    );
+    if (remaining.length === 0) {
+      return;
+    }
+
+    setDashboard((current) => ({
+      ...current,
+      layouts: current.layouts.filter(
+        (layout) => layout.id !== layoutId,
+      ),
+    }));
+    setActiveLayoutId(remaining[0].id);
+    setSelectedWidgetId(undefined);
+  }
+
+  function resetLayout() {
+    updateActiveLayout((layout) =>
+      autoArrangeLayout(layout, dashboard.widgets),
+    );
+  }
+
+  function addWidget(definition: WidgetDefinition) {
+    const widget = createWidgetInstance(
+      definition.key,
+      dashboard.widgets.length,
+    );
+
+    setDashboard((current) => ({
+      ...current,
+      widgets: [...current.widgets, widget],
+      layouts: current.layouts.map((layout) =>
+        addWidgetToLayout(layout, widget),
+      ),
+    }));
+    setSelectedWidgetId(widget.id);
+    setPanel("selected");
+  }
+
+  function updateSelectedWidget(
+    updates: Partial<WidgetInstance>,
+  ) {
+    if (!selectedWidgetId) {
+      return;
+    }
+
+    setDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) =>
+        widget.id === selectedWidgetId
+          ? { ...widget, ...updates }
+          : widget,
+      ),
+    }));
+  }
+
+  function updateSelectedPlacement(
+    updates: Partial<WidgetPlacement>,
+  ) {
+    if (!selectedWidgetId) {
+      return;
+    }
+
+    updateActiveLayout((layout) => ({
+      ...layout,
+      placements: layout.placements.map(
+        (placement) =>
+          placement.widgetId === selectedWidgetId
+            ? { ...placement, ...updates }
+            : placement,
+      ),
+    }));
+  }
+
+  function duplicateSelectedWidget() {
+    if (!selectedWidget) {
+      return;
+    }
+
+    const duplicate: WidgetInstance = {
+      ...selectedWidget,
+      id: `${selectedWidget.widgetKey}-${Date.now()}`,
+      title: `${selectedWidget.title} Copy`,
+      settings: { ...selectedWidget.settings },
+    };
+
+    setDashboard((current) => ({
+      ...current,
+      widgets: [...current.widgets, duplicate],
+      layouts: current.layouts.map((layout) =>
+        addWidgetToLayout(layout, duplicate),
+      ),
+    }));
+    setSelectedWidgetId(duplicate.id);
+  }
+
+  function removeSelectedWidget() {
+    if (!selectedWidgetId) {
+      return;
+    }
+
+    setDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.filter(
+        (widget) => widget.id !== selectedWidgetId,
+      ),
+      layouts: current.layouts.map((layout) => ({
+        ...layout,
+        placements: layout.placements.filter(
+          (placement) =>
+            placement.widgetId !== selectedWidgetId,
+        ),
+      })),
+    }));
+    setSelectedWidgetId(undefined);
+    setPanel("widgets");
+  }
 
   function updateWeatherLocation(
     location: WeatherLocationSelection,
   ) {
-    if (!weatherSource) {
-      return;
-    }
-
-    setSources((current) =>
-      current.map((source) =>
-        source.id === weatherSource.id
+    setDashboard((current) => ({
+      ...current,
+      sources: current.sources.map((source) =>
+        source.kind === "weather-location"
           ? {
               ...source,
               label: location.label,
@@ -95,386 +301,113 @@ export function DashboardBuilder() {
             }
           : source,
       ),
-    );
+    }));
   }
 
-  function addWidget(definition: WidgetDefinition) {
-    const nextWidget = createWidget(definition, sources);
-
-    setWidgets((current) => [
-      ...current,
-      {
-        ...nextWidget,
-        position: current.length,
-      },
-    ]);
-  }
-
-  function removeWidget(id: string) {
-    setWidgets((current) =>
-      normalizePositions(
-        current.filter((widget) => widget.id !== id),
-      ),
-    );
-  }
-
-  function moveWidget(id: string, direction: -1 | 1) {
-    setWidgets((current) => {
-      const ordered = [...current].sort(
-        (first, second) =>
-          first.position - second.position,
-      );
-      const currentIndex = ordered.findIndex(
-        (widget) => widget.id === id,
-      );
-      const targetIndex = currentIndex + direction;
-
-      if (
-        currentIndex < 0 ||
-        targetIndex < 0 ||
-        targetIndex >= ordered.length
-      ) {
-        return current;
-      }
-
-      [ordered[currentIndex], ordered[targetIndex]] = [
-        ordered[targetIndex],
-        ordered[currentIndex],
-      ];
-
-      return normalizePositions(ordered);
-    });
-  }
-
-  function changeWidgetSize(
-    id: string,
-    size: WidgetSize,
-  ) {
-    setWidgets((current) =>
-      current.map((widget) =>
-        widget.id === id ? { ...widget, size } : widget,
-      ),
-    );
+  if (!activeLayout) {
+    return null;
   }
 
   return (
-    <main className="min-h-screen">
-      <header className="border-b border-[var(--border)] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-          <div>
-            <Link
-              href="/"
-              className="text-sm font-medium text-[var(--accent)]"
-            >
-              Fishing Forecast
-            </Link>
-            <h1 className="mt-1 text-2xl font-semibold">
-              Dashboard Builder
-            </h1>
-          </div>
+    <main className="flex min-h-screen flex-col">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] bg-white px-5 py-3">
+        <div className="flex min-w-0 items-center gap-4">
+          <Link
+            href="/"
+            className="shrink-0 text-sm font-medium text-[var(--accent)]"
+          >
+            Fishing Forecast
+          </Link>
+          <input
+            aria-label="Dashboard name"
+            value={dashboard.name}
+            onChange={(event) =>
+              updateDashboardName(event.target.value)
+            }
+            className="min-w-0 max-w-sm rounded-xl border border-transparent bg-[var(--surface-muted)] px-3 py-2 font-medium focus:border-[var(--accent)] focus:bg-white"
+          />
+        </div>
 
+        <div className="flex items-center gap-2">
+          {dashboard.layouts.map((layout) => (
+            <button
+              key={layout.id}
+              type="button"
+              onClick={() => {
+                setActiveLayoutId(layout.id);
+                setSelectedWidgetId(undefined);
+                setZoom("fit");
+              }}
+              className={[
+                "rounded-xl px-3 py-2 text-sm",
+                layout.id === activeLayout.id
+                  ? "bg-[var(--selection)] font-medium text-[var(--accent)]"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-muted)]",
+              ].join(" ")}
+            >
+              {layout.name}
+            </button>
+          ))}
           <button
             type="button"
             disabled
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 font-medium text-white opacity-60"
-            title="Persistence will be added after the builder is stable."
+            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white opacity-60"
+            title="Saving will be added after the editor model is finalized."
           >
-            Save dashboard
+            Save
           </button>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="space-y-5">
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <label
-              htmlFor="dashboard-name"
-              className="text-sm font-medium"
-            >
-              Dashboard name
-            </label>
-            <input
-              id="dashboard-name"
-              value={dashboardName}
-              onChange={(event) =>
-                setDashboardName(event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
-            />
-          </section>
+      <div className="flex min-h-0 flex-1 flex-col lg:h-[calc(100vh-65px)] lg:flex-row">
+        <BuilderToolbar
+          panel={panel}
+          onPanelChange={setPanel}
+          layouts={dashboard.layouts}
+          activeLayout={activeLayout}
+          sources={dashboard.sources}
+          selectedWidget={selectedWidget}
+          selectedPlacement={selectedPlacement}
+          onSelectLayout={(layoutId) => {
+            setActiveLayoutId(layoutId);
+            setSelectedWidgetId(undefined);
+            setZoom("fit");
+          }}
+          onCreateLayout={createLayout}
+          onDeleteLayout={deleteLayout}
+          onApplyLayoutPreset={applyLayoutPreset}
+          onUpdateLayout={updateLayout}
+          onResetLayout={resetLayout}
+          onAddWidget={addWidget}
+          onWeatherLocationChange={
+            updateWeatherLocation
+          }
+          onUpdateWidget={updateSelectedWidget}
+          onUpdatePlacement={
+            updateSelectedPlacement
+          }
+          onDuplicateWidget={
+            duplicateSelectedWidget
+          }
+          onRemoveWidget={removeSelectedWidget}
+        />
 
-          {weatherSource ? (
-            <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
-              <WeatherSourceEditor
-                source={weatherSource}
-                onLocationChange={updateWeatherLocation}
-              />
-            </section>
-          ) : null}
-
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <h2 className="font-medium">Configured sources</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Tides, waves, and astronomy remain independent.
-            </p>
-
-            <ul className="mt-3 space-y-2 text-sm">
-              {sources.map((source) => {
-                const weatherState =
-                  source.kind === "weather-location"
-                    ? weatherStates[source.id]
-                    : undefined;
-
-                return (
-                  <li
-                    key={source.id}
-                    className="flex items-start justify-between gap-3 rounded-xl bg-[var(--surface-muted)] p-3"
-                  >
-                    <div>
-                      <p className="font-medium">{source.label}</p>
-                      <p className="mt-1 text-xs text-[var(--muted)]">
-                        {sourceKindLabel(source.kind)}
-                      </p>
-                    </div>
-
-                    <SourceStatus
-                      isLive={
-                        source.kind === "weather-location"
-                      }
-                      status={weatherState?.status}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-
-          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
-            <h2 className="font-medium">Add widgets</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">
-              Widgets are atomic, but grouped into categories for
-              discovery.
-            </p>
-
-            <div className="mt-5 space-y-5">
-              {categoryOrder.map((category) => (
-                <div key={category}>
-                  <h3 className="text-sm font-medium">
-                    {categoryLabels[category]}
-                  </h3>
-
-                  <div className="mt-2 grid gap-2">
-                    {widgetDefinitions
-                      .filter(
-                        (item) =>
-                          item.category === category,
-                      )
-                      .map((definition) => (
-                        <button
-                          key={definition.key}
-                          type="button"
-                          onClick={() =>
-                            addWidget(definition)
-                          }
-                          className="rounded-xl border border-[var(--border)] px-3 py-2 text-left transition hover:border-[var(--accent)] hover:bg-[var(--surface-muted)]"
-                        >
-                          <span className="block text-sm font-medium">
-                            + {definition.name}
-                          </span>
-                          <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">
-                            {definition.description}
-                          </span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </aside>
-
-        <section>
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-sm text-[var(--muted)]">
-                Dashboard preview
-              </p>
-              <h2 className="text-2xl font-semibold">
-                {dashboardName || "Untitled dashboard"}
-              </h2>
-            </div>
-
-            <p className="text-sm text-[var(--muted)]">
-              {widgets.length}{" "}
-              {widgets.length === 1
-                ? "widget"
-                : "widgets"}
-            </p>
-          </div>
-
-          {orderedWidgets.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-10 text-center">
-              <h3 className="font-medium">
-                Your dashboard is empty
-              </h3>
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                Choose a widget from a category to begin.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {orderedWidgets.map((widget, index) => {
-                const source =
-                  sources.find(
-                    (item) =>
-                      item.id === widget.sourceId,
-                  ) ?? sources[0];
-
-                if (!source) {
-                  return null;
-                }
-
-                return (
-                  <div
-                    key={widget.id}
-                    className={
-                      sizeClassNames[widget.size]
-                    }
-                  >
-                    <DashboardWidgetCard
-                      widget={widget}
-                      source={source}
-                      weatherState={
-                        weatherStates[source.id]
-                      }
-                      canMoveUp={index > 0}
-                      canMoveDown={
-                        index <
-                        orderedWidgets.length - 1
-                      }
-                      onMoveUp={() =>
-                        moveWidget(widget.id, -1)
-                      }
-                      onMoveDown={() =>
-                        moveWidget(widget.id, 1)
-                      }
-                      onRemove={() =>
-                        removeWidget(widget.id)
-                      }
-                      onSizeChange={(size) =>
-                        changeWidgetSize(
-                          widget.id,
-                          size,
-                        )
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <BuilderPreview
+          layout={activeLayout}
+          widgets={dashboard.widgets}
+          sources={dashboard.sources}
+          weatherStates={weatherStates}
+          mode={mode}
+          zoom={zoom}
+          showGrid={showGrid}
+          selectedWidgetId={selectedWidgetId}
+          onModeChange={setMode}
+          onZoomChange={setZoom}
+          onShowGridChange={setShowGrid}
+          onSelectWidget={selectWidget}
+          onPlacementsChange={updatePlacements}
+        />
       </div>
     </main>
   );
-}
-
-function SourceStatus({
-  isLive,
-  status,
-}: {
-  isLive: boolean;
-  status?: "idle" | "loading" | "success" | "error";
-}) {
-  if (!isLive) {
-    return (
-      <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-[var(--muted)]">
-        Mock
-      </span>
-    );
-  }
-
-  const labels = {
-    idle: "Waiting",
-    loading: "Loading",
-    success: "Live",
-    error: "Error",
-  } as const;
-
-  return (
-    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-[var(--muted)]">
-      {labels[status ?? "idle"]}
-    </span>
-  );
-}
-
-const sizeClassNames: Record<WidgetSize, string> = {
-  small: "md:col-span-1 xl:col-span-1",
-  medium: "md:col-span-2 xl:col-span-2",
-  large: "md:col-span-2 xl:col-span-4",
-};
-
-function createWidget(
-  definition: WidgetDefinition,
-  sources: DashboardSource[],
-): WidgetInstance {
-  const source = sources.find(
-    (candidate) =>
-      candidate.kind === definition.sourceKind,
-  );
-
-  if (!source) {
-    throw new Error(
-      `No source available for widget source kind: ${definition.sourceKind}`,
-    );
-  }
-
-  return {
-    id: createId(),
-    widgetKey: definition.key,
-    category: definition.category,
-    sourceId: source.id,
-    title: definition.defaultTitle,
-    position: 0,
-    size: definition.defaultSize,
-    settings: {},
-  };
-}
-
-function createId(): string {
-  if (
-    typeof globalThis.crypto !== "undefined" &&
-    "randomUUID" in globalThis.crypto
-  ) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `widget-${Date.now()}-${Math.random()
-    .toString(16)
-    .slice(2)}`;
-}
-
-function normalizePositions(
-  widgets: WidgetInstance[],
-): WidgetInstance[] {
-  return widgets.map((widget, index) => ({
-    ...widget,
-    position: index,
-  }));
-}
-
-function sourceKindLabel(
-  kind: DashboardSource["kind"],
-): string {
-  const labels: Record<
-    DashboardSource["kind"],
-    string
-  > = {
-    "weather-location": "Weather & wind location",
-    "tide-station": "Tide station",
-    "marine-location": "Marine coordinate",
-    "astronomy-location": "Moon & sun location",
-  };
-
-  return labels[kind];
 }

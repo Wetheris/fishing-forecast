@@ -5,8 +5,6 @@ export type WidgetCategory =
   | "waves"
   | "moon-sun";
 
-export type WidgetSize = "small" | "medium" | "large";
-
 export type SourceKind =
   | "weather-location"
   | "tide-station"
@@ -37,6 +35,8 @@ export type WidgetKey =
   | "moonrise-moonset"
   | "sunrise-sunset";
 
+export type LayoutDevice = "desktop" | "mobile";
+
 export type DashboardSource = {
   id: string;
   kind: SourceKind;
@@ -55,9 +55,39 @@ export type WidgetInstance = {
   category: WidgetCategory;
   sourceId: string;
   title: string;
-  position: number;
-  size: WidgetSize;
   settings: Record<string, unknown>;
+};
+
+export type WidgetPlacement = {
+  widgetId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW: number;
+  minH: number;
+  maxW?: number;
+  maxH?: number;
+  hidden?: boolean;
+};
+
+export type DashboardLayout = {
+  id: string;
+  name: string;
+  device: LayoutDevice;
+  enabled: boolean;
+  presetKey: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+  grid: {
+    columns: number;
+    rowHeight: number;
+    gap: number;
+    padding: number;
+  };
+  placements: WidgetPlacement[];
 };
 
 export type FishingDashboard = {
@@ -66,4 +96,5 @@ export type FishingDashboard = {
   slug?: string;
   sources: DashboardSource[];
   widgets: WidgetInstance[];
+  layouts: DashboardLayout[];
 };

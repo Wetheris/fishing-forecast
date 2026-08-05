@@ -13,49 +13,76 @@ import {
   formatForecastDay,
   formatLocalHour,
 } from "@/lib/date-format";
+import {
+  booleanSetting,
+  numberSetting,
+  stringSetting,
+} from "@/lib/widget-settings";
 
 export function CurrentTemperatureWidget({
-  source,
+  widget,
   weatherState,
 }: WidgetComponentProps) {
+  const unit = stringSetting(
+    widget.settings,
+    "unit",
+    "fahrenheit",
+  );
+  const showFeelsLike = booleanSetting(
+    widget.settings,
+    "showFeelsLike",
+    true,
+  );
+
   return (
     <WeatherDataView state={weatherState}>
-      {(data) => (
-        <MetricValue
-          value={`${roundMeasurement(
-            celsiusToFahrenheit(
-              data.current.temperatureC,
-            ),
-          )}°F`}
-          detail={`Feels like ${roundMeasurement(
-            celsiusToFahrenheit(
-              data.current.apparentTemperatureC,
-            ),
-          )}°F · ${source.label}`}
-        />
-      )}
+      {(data) => {
+        const temperature =
+          unit === "celsius"
+            ? data.current.temperatureC
+            : celsiusToFahrenheit(
+                data.current.temperatureC,
+              );
+        const feelsLike =
+          unit === "celsius"
+            ? data.current.apparentTemperatureC
+            : celsiusToFahrenheit(
+                data.current.apparentTemperatureC,
+              );
+        const symbol = unit === "celsius" ? "C" : "F";
+
+        return (
+          <MetricValue
+            value={`${roundMeasurement(
+              temperature,
+            )}°${symbol}`}
+            detail={
+              showFeelsLike
+                ? `Feels like ${roundMeasurement(
+                    feelsLike,
+                  )}°${symbol}`
+                : undefined
+            }
+          />
+        );
+      }}
     </WeatherDataView>
   );
 }
 
 export function CurrentConditionsWidget({
-  source,
   weatherState,
 }: WidgetComponentProps) {
   return (
     <WeatherDataView state={weatherState}>
       {(data) => (
-        <MetricValue
-          value={data.current.condition}
-          detail={source.label}
-        />
+        <MetricValue value={data.current.condition} />
       )}
     </WeatherDataView>
   );
 }
 
 export function RainChanceWidget({
-  source,
   weatherState,
 }: WidgetComponentProps) {
   return (
@@ -69,7 +96,7 @@ export function RainChanceWidget({
                   data.current.rainChancePercent,
                 )}%`
           }
-          detail={`Current hour · ${source.label}`}
+          detail="Current hour"
         />
       )}
     </WeatherDataView>
@@ -77,24 +104,35 @@ export function RainChanceWidget({
 }
 
 export function HourlyForecastWidget({
+  widget,
   weatherState,
 }: WidgetComponentProps) {
+  const hours = numberSetting(
+    widget.settings,
+    "hours",
+    5,
+  );
+
   return (
     <WeatherDataView state={weatherState}>
       {(data) => (
         <CompactTimeline
-          columns={data.hourly.slice(0, 5).map((hour) => ({
-            label: formatLocalHour(hour.time),
-            primary: `${roundMeasurement(
-              celsiusToFahrenheit(hour.temperatureC),
-            )}°F`,
-            secondary:
-              hour.rainChancePercent === null
-                ? hour.condition
-                : `${roundMeasurement(
-                    hour.rainChancePercent,
-                  )}% rain`,
-          }))}
+          columns={data.hourly
+            .slice(0, hours)
+            .map((hour) => ({
+              label: formatLocalHour(hour.time),
+              primary: `${roundMeasurement(
+                celsiusToFahrenheit(
+                  hour.temperatureC,
+                ),
+              )}°F`,
+              secondary:
+                hour.rainChancePercent === null
+                  ? hour.condition
+                  : `${roundMeasurement(
+                      hour.rainChancePercent,
+                    )}% rain`,
+            }))}
         />
       )}
     </WeatherDataView>
@@ -102,22 +140,35 @@ export function HourlyForecastWidget({
 }
 
 export function DailyForecastWidget({
+  widget,
   weatherState,
 }: WidgetComponentProps) {
+  const days = numberSetting(
+    widget.settings,
+    "days",
+    5,
+  );
+
   return (
     <WeatherDataView state={weatherState}>
       {(data) => (
         <DataList
-          rows={data.daily.slice(0, 5).map((day) => ({
-            label: `${formatForecastDay(day.date)} · ${
-              day.condition
-            }`,
-            value: `${roundMeasurement(
-              celsiusToFahrenheit(day.temperatureMaxC),
-            )}° / ${roundMeasurement(
-              celsiusToFahrenheit(day.temperatureMinC),
-            )}°`,
-          }))}
+          rows={data.daily
+            .slice(0, days)
+            .map((day) => ({
+              label: `${formatForecastDay(
+                day.date,
+              )} · ${day.condition}`,
+              value: `${roundMeasurement(
+                celsiusToFahrenheit(
+                  day.temperatureMaxC,
+                ),
+              )}° / ${roundMeasurement(
+                celsiusToFahrenheit(
+                  day.temperatureMinC,
+                ),
+              )}°`,
+            }))}
         />
       )}
     </WeatherDataView>

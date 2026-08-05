@@ -1,12 +1,19 @@
 import type {
   DashboardSource,
+  LayoutDevice,
+  SourceKind,
   WidgetCategory,
   WidgetInstance,
   WidgetKey,
-  WidgetSize,
-  SourceKind,
 } from "@/types/dashboard";
 import type { WeatherSourceState } from "@/types/weather";
+
+export type DefaultPlacement = {
+  w: number;
+  h: number;
+  minW: number;
+  minH: number;
+};
 
 export type WidgetDefinition = {
   key: WidgetKey;
@@ -14,8 +21,9 @@ export type WidgetDefinition = {
   description: string;
   category: WidgetCategory;
   sourceKind: SourceKind;
-  defaultSize: WidgetSize;
   defaultTitle: string;
+  defaultSettings: Record<string, unknown>;
+  defaultPlacement: Record<LayoutDevice, DefaultPlacement>;
 };
 
 export type WidgetComponentProps = {

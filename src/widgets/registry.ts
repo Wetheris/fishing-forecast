@@ -1,5 +1,61 @@
-import type { WidgetDefinition } from "@/widgets/types";
-import type { WidgetCategory, WidgetKey } from "@/types/dashboard";
+import type {
+  LayoutDevice,
+  WidgetCategory,
+  WidgetKey,
+} from "@/types/dashboard";
+import type {
+  DefaultPlacement,
+  WidgetDefinition,
+} from "@/widgets/types";
+
+const metricDesktop: DefaultPlacement = {
+  w: 3,
+  h: 2,
+  minW: 2,
+  minH: 2,
+};
+
+const metricMobile: DefaultPlacement = {
+  w: 2,
+  h: 2,
+  minW: 2,
+  minH: 2,
+};
+
+const mediumDesktop: DefaultPlacement = {
+  w: 6,
+  h: 3,
+  minW: 4,
+  minH: 2,
+};
+
+const mediumMobile: DefaultPlacement = {
+  w: 4,
+  h: 3,
+  minW: 4,
+  minH: 2,
+};
+
+const timelineDesktop: DefaultPlacement = {
+  w: 12,
+  h: 3,
+  minW: 6,
+  minH: 3,
+};
+
+const timelineMobile: DefaultPlacement = {
+  w: 4,
+  h: 4,
+  minW: 4,
+  minH: 3,
+};
+
+function placements(
+  desktop: DefaultPlacement,
+  mobile: DefaultPlacement,
+): Record<LayoutDevice, DefaultPlacement> {
+  return { desktop, mobile };
+}
 
 export const widgetDefinitions: WidgetDefinition[] = [
   {
@@ -8,8 +64,14 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current and feels-like temperature.",
     category: "weather",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Temperature",
+    defaultSettings: {
+      unit: "fahrenheit",
+      showFeelsLike: true,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "current-conditions",
@@ -17,8 +79,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current sky and precipitation conditions.",
     category: "weather",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Conditions",
+    defaultSettings: {
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "rain-chance",
@@ -26,8 +92,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Upcoming precipitation probability.",
     category: "weather",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Rain Chance",
+    defaultSettings: {
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "hourly-forecast",
@@ -35,8 +105,13 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "A compact hourly weather timeline.",
     category: "weather",
     sourceKind: "weather-location",
-    defaultSize: "large",
     defaultTitle: "Hourly Forecast",
+    defaultSettings: {
+      hours: 5,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(timelineDesktop, timelineMobile),
   },
   {
     key: "daily-forecast",
@@ -44,8 +119,13 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Upcoming daily highs, lows, and conditions.",
     category: "weather",
     sourceKind: "weather-location",
-    defaultSize: "large",
     defaultTitle: "Daily Forecast",
+    defaultSettings: {
+      days: 5,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(timelineDesktop, timelineMobile),
   },
   {
     key: "wind-speed",
@@ -53,8 +133,14 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current sustained wind speed.",
     category: "wind",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Wind Speed",
+    defaultSettings: {
+      unit: "mph",
+      showDirection: true,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "wind-gusts",
@@ -62,8 +148,13 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current and expected wind gusts.",
     category: "wind",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Wind Gusts",
+    defaultSettings: {
+      unit: "mph",
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "wind-direction",
@@ -71,8 +162,13 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Compass direction and bearing.",
     category: "wind",
     sourceKind: "weather-location",
-    defaultSize: "small",
     defaultTitle: "Wind Direction",
+    defaultSettings: {
+      showBearing: true,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "wind-forecast",
@@ -80,8 +176,14 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Hourly wind speed, gust, and direction changes.",
     category: "wind",
     sourceKind: "weather-location",
-    defaultSize: "large",
     defaultTitle: "Wind Forecast",
+    defaultSettings: {
+      unit: "mph",
+      hours: 5,
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(timelineDesktop, timelineMobile),
   },
   {
     key: "next-high-tide",
@@ -89,8 +191,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Time and predicted height of the next high tide.",
     category: "tides",
     sourceKind: "tide-station",
-    defaultSize: "small",
     defaultTitle: "Next High Tide",
+    defaultSettings: {
+      heightUnit: "feet",
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "next-low-tide",
@@ -98,8 +204,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Time and predicted height of the next low tide.",
     category: "tides",
     sourceKind: "tide-station",
-    defaultSize: "small",
     defaultTitle: "Next Low Tide",
+    defaultSettings: {
+      heightUnit: "feet",
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "tide-status",
@@ -107,8 +217,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Whether the tide is rising, falling, or near a turn.",
     category: "tides",
     sourceKind: "tide-station",
-    defaultSize: "small",
     defaultTitle: "Tide Status",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "tide-timeline",
@@ -116,8 +229,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Upcoming high and low tide events.",
     category: "tides",
     sourceKind: "tide-station",
-    defaultSize: "large",
     defaultTitle: "Tide Timeline",
+    defaultSettings: {
+      heightUnit: "feet",
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(timelineDesktop, timelineMobile),
   },
   {
     key: "tide-station",
@@ -125,8 +242,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Station identity and distance from the fishing location.",
     category: "tides",
     sourceKind: "tide-station",
-    defaultSize: "medium",
     defaultTitle: "Tide Station",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(mediumDesktop, mediumMobile),
   },
   {
     key: "wave-height",
@@ -134,8 +254,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current significant wave height.",
     category: "waves",
     sourceKind: "marine-location",
-    defaultSize: "small",
     defaultTitle: "Wave Height",
+    defaultSettings: {
+      lengthUnit: "feet",
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "wave-direction",
@@ -143,8 +267,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Direction waves are arriving from.",
     category: "waves",
     sourceKind: "marine-location",
-    defaultSize: "small",
     defaultTitle: "Wave Direction",
+    defaultSettings: {
+      showBearing: true,
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "wave-period",
@@ -152,8 +280,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Time between successive wave crests.",
     category: "waves",
     sourceKind: "marine-location",
-    defaultSize: "small",
     defaultTitle: "Wave Period",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "swell-information",
@@ -161,8 +292,12 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Swell height, direction, and period.",
     category: "waves",
     sourceKind: "marine-location",
-    defaultSize: "medium",
     defaultTitle: "Swell",
+    defaultSettings: {
+      lengthUnit: "feet",
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(mediumDesktop, mediumMobile),
   },
   {
     key: "moon-phase",
@@ -170,8 +305,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Current lunar phase.",
     category: "moon-sun",
     sourceKind: "astronomy-location",
-    defaultSize: "small",
     defaultTitle: "Moon Phase",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "moon-illumination",
@@ -179,8 +317,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Visible percentage of the Moon.",
     category: "moon-sun",
     sourceKind: "astronomy-location",
-    defaultSize: "small",
     defaultTitle: "Moon Illumination",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
   },
   {
     key: "moonrise-moonset",
@@ -188,8 +329,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Local Moon rise and set times.",
     category: "moon-sun",
     sourceKind: "astronomy-location",
-    defaultSize: "medium",
     defaultTitle: "Moonrise & Moonset",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(mediumDesktop, mediumMobile),
   },
   {
     key: "sunrise-sunset",
@@ -197,8 +341,11 @@ export const widgetDefinitions: WidgetDefinition[] = [
     description: "Local daylight times.",
     category: "moon-sun",
     sourceKind: "astronomy-location",
-    defaultSize: "medium",
     defaultTitle: "Sunrise & Sunset",
+    defaultSettings: {
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(mediumDesktop, mediumMobile),
   },
 ];
 
@@ -218,8 +365,12 @@ export const categoryOrder: WidgetCategory[] = [
   "moon-sun",
 ];
 
-export function getWidgetDefinition(key: WidgetKey): WidgetDefinition {
-  const definition = widgetDefinitions.find((item) => item.key === key);
+export function getWidgetDefinition(
+  key: WidgetKey,
+): WidgetDefinition {
+  const definition = widgetDefinitions.find(
+    (item) => item.key === key,
+  );
 
   if (!definition) {
     throw new Error(`Unknown widget: ${key}`);
