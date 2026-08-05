@@ -51,37 +51,6 @@ export const mockSources: DashboardSource[] = [
 ];
 
 export const mockForecast = {
-  weather: {
-    temperatureF: 74,
-    feelsLikeF: 75,
-    condition: "Partly cloudy",
-    rainChancePercent: 20,
-    hourly: [
-      { time: "12 PM", temperatureF: 74, rainChancePercent: 10 },
-      { time: "1 PM", temperatureF: 75, rainChancePercent: 15 },
-      { time: "2 PM", temperatureF: 76, rainChancePercent: 20 },
-      { time: "3 PM", temperatureF: 75, rainChancePercent: 25 },
-      { time: "4 PM", temperatureF: 74, rainChancePercent: 30 },
-    ],
-    daily: [
-      { day: "Today", highF: 76, lowF: 65, condition: "Partly cloudy" },
-      { day: "Thu", highF: 74, lowF: 64, condition: "Showers" },
-      { day: "Fri", highF: 78, lowF: 66, condition: "Mostly sunny" },
-      { day: "Sat", highF: 80, lowF: 68, condition: "Sunny" },
-    ],
-  },
-  wind: {
-    speedMph: 9,
-    gustMph: 15,
-    directionDegrees: 65,
-    directionLabel: "ENE",
-    hourly: [
-      { time: "12 PM", speedMph: 9, gustMph: 15, direction: "ENE" },
-      { time: "1 PM", speedMph: 10, gustMph: 16, direction: "E" },
-      { time: "2 PM", speedMph: 11, gustMph: 18, direction: "E" },
-      { time: "3 PM", speedMph: 10, gustMph: 17, direction: "ESE" },
-    ],
-  },
   tides: {
     nextHigh: { time: "2:46 PM", heightFt: 4.7 },
     nextLow: { time: "9:12 PM", heightFt: 0.3 },

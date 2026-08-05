@@ -1,63 +1,125 @@
-import { mockForecast } from "@/lib/mock-data";
 import type { WidgetComponentProps } from "@/widgets/types";
 import {
   CompactTimeline,
   DataList,
   MetricValue,
 } from "@/widgets/shared/WidgetPrimitives";
+import { WeatherDataView } from "@/widgets/weather/WeatherDataView";
+import {
+  celsiusToFahrenheit,
+  roundMeasurement,
+} from "@/lib/units";
+import {
+  formatForecastDay,
+  formatLocalHour,
+} from "@/lib/date-format";
 
 export function CurrentTemperatureWidget({
   source,
+  weatherState,
 }: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={`${mockForecast.weather.temperatureF}°F`}
-      detail={`Feels like ${mockForecast.weather.feelsLikeF}°F · ${source.label}`}
-    />
+    <WeatherDataView state={weatherState}>
+      {(data) => (
+        <MetricValue
+          value={`${roundMeasurement(
+            celsiusToFahrenheit(
+              data.current.temperatureC,
+            ),
+          )}°F`}
+          detail={`Feels like ${roundMeasurement(
+            celsiusToFahrenheit(
+              data.current.apparentTemperatureC,
+            ),
+          )}°F · ${source.label}`}
+        />
+      )}
+    </WeatherDataView>
   );
 }
 
 export function CurrentConditionsWidget({
   source,
+  weatherState,
 }: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={mockForecast.weather.condition}
-      detail={source.label}
-    />
+    <WeatherDataView state={weatherState}>
+      {(data) => (
+        <MetricValue
+          value={data.current.condition}
+          detail={source.label}
+        />
+      )}
+    </WeatherDataView>
   );
 }
 
 export function RainChanceWidget({
   source,
+  weatherState,
 }: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={`${mockForecast.weather.rainChancePercent}%`}
-      detail={`Next hour · ${source.label}`}
-    />
+    <WeatherDataView state={weatherState}>
+      {(data) => (
+        <MetricValue
+          value={
+            data.current.rainChancePercent === null
+              ? "—"
+              : `${roundMeasurement(
+                  data.current.rainChancePercent,
+                )}%`
+          }
+          detail={`Current hour · ${source.label}`}
+        />
+      )}
+    </WeatherDataView>
   );
 }
 
-export function HourlyForecastWidget() {
+export function HourlyForecastWidget({
+  weatherState,
+}: WidgetComponentProps) {
   return (
-    <CompactTimeline
-      columns={mockForecast.weather.hourly.map((hour) => ({
-        label: hour.time,
-        primary: `${hour.temperatureF}°F`,
-        secondary: `${hour.rainChancePercent}% rain`,
-      }))}
-    />
+    <WeatherDataView state={weatherState}>
+      {(data) => (
+        <CompactTimeline
+          columns={data.hourly.slice(0, 5).map((hour) => ({
+            label: formatLocalHour(hour.time),
+            primary: `${roundMeasurement(
+              celsiusToFahrenheit(hour.temperatureC),
+            )}°F`,
+            secondary:
+              hour.rainChancePercent === null
+                ? hour.condition
+                : `${roundMeasurement(
+                    hour.rainChancePercent,
+                  )}% rain`,
+          }))}
+        />
+      )}
+    </WeatherDataView>
   );
 }
 
-export function DailyForecastWidget() {
+export function DailyForecastWidget({
+  weatherState,
+}: WidgetComponentProps) {
   return (
-    <DataList
-      rows={mockForecast.weather.daily.map((day) => ({
-        label: `${day.day} · ${day.condition}`,
-        value: `${day.highF}° / ${day.lowF}°`,
-      }))}
-    />
+    <WeatherDataView state={weatherState}>
+      {(data) => (
+        <DataList
+          rows={data.daily.slice(0, 5).map((day) => ({
+            label: `${formatForecastDay(day.date)} · ${
+              day.condition
+            }`,
+            value: `${roundMeasurement(
+              celsiusToFahrenheit(day.temperatureMaxC),
+            )}° / ${roundMeasurement(
+              celsiusToFahrenheit(day.temperatureMinC),
+            )}°`,
+          }))}
+        />
+      )}
+    </WeatherDataView>
   );
 }

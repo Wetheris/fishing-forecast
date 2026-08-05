@@ -6,6 +6,7 @@ import type {
   WidgetSize,
   SourceKind,
 } from "@/types/dashboard";
+import type { WeatherSourceState } from "@/types/weather";
 
 export type WidgetDefinition = {
   key: WidgetKey;
@@ -20,4 +21,5 @@ export type WidgetDefinition = {
 export type WidgetComponentProps = {
   widget: WidgetInstance;
   source: DashboardSource;
+  weatherState?: WeatherSourceState;
 };

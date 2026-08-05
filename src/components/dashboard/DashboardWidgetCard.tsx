@@ -3,11 +3,13 @@ import type {
   WidgetInstance,
   WidgetSize,
 } from "@/types/dashboard";
+import type { WeatherSourceState } from "@/types/weather";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 
 type DashboardWidgetCardProps = {
   widget: WidgetInstance;
   source: DashboardSource;
+  weatherState?: WeatherSourceState;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMoveUp: () => void;
@@ -19,6 +21,7 @@ type DashboardWidgetCardProps = {
 export function DashboardWidgetCard({
   widget,
   source,
+  weatherState,
   canMoveUp,
   canMoveDown,
   onMoveUp,
@@ -81,7 +84,11 @@ export function DashboardWidgetCard({
       </header>
 
       <div className="flex-1 p-4">
-        <WidgetRenderer widget={widget} source={source} />
+        <WidgetRenderer
+          widget={widget}
+          source={source}
+          weatherState={weatherState}
+        />
       </div>
     </article>
   );

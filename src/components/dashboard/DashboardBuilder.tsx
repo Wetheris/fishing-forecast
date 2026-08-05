@@ -7,7 +7,9 @@ import type {
   WidgetInstance,
   WidgetSize,
 } from "@/types/dashboard";
+import type { WeatherLocationSelection } from "@/types/geocoding";
 import { mockSources } from "@/lib/mock-data";
+import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
   categoryLabels,
   categoryOrder,
@@ -15,32 +17,89 @@ import {
 } from "@/widgets/registry";
 import type { WidgetDefinition } from "@/widgets/types";
 import { DashboardWidgetCard } from "@/components/dashboard/DashboardWidgetCard";
+import { WeatherSourceEditor } from "@/components/sources/WeatherSourceEditor";
 
 const initialWidgets: WidgetInstance[] = [
-  createWidget(widgetDefinitions[0], mockSources),
-  createWidget(
-    widgetDefinitions.find((item) => item.key === "wind-speed") ??
-      widgetDefinitions[0],
-    mockSources,
-  ),
-  createWidget(
-    widgetDefinitions.find((item) => item.key === "next-high-tide") ??
-      widgetDefinitions[0],
-    mockSources,
-  ),
+  {
+    id: "initial-temperature",
+    widgetKey: "current-temperature",
+    category: "weather",
+    sourceId: "cape-may-weather",
+    title: "Temperature",
+    position: 0,
+    size: "small",
+    settings: {},
+  },
+  {
+    id: "initial-wind-speed",
+    widgetKey: "wind-speed",
+    category: "wind",
+    sourceId: "cape-may-weather",
+    title: "Wind Speed",
+    position: 1,
+    size: "small",
+    settings: {},
+  },
+  {
+    id: "initial-next-high-tide",
+    widgetKey: "next-high-tide",
+    category: "tides",
+    sourceId: "cape-may-tides",
+    title: "Next High Tide",
+    position: 2,
+    size: "small",
+    settings: {},
+  },
 ];
 
 export function DashboardBuilder() {
-  const [dashboardName, setDashboardName] = useState("Cape May Fishing");
-  const [widgets, setWidgets] = useState<WidgetInstance[]>(initialWidgets);
+  const [dashboardName, setDashboardName] = useState(
+    "Cape May Fishing",
+  );
+  const [sources, setSources] =
+    useState<DashboardSource[]>(mockSources);
+  const [widgets, setWidgets] =
+    useState<WidgetInstance[]>(initialWidgets);
+
+  const weatherStates = useWeatherSources(sources);
+
+  const weatherSource = sources.find(
+    (source) => source.kind === "weather-location",
+  );
 
   const orderedWidgets = useMemo(
-    () => [...widgets].sort((a, b) => a.position - b.position),
+    () =>
+      [...widgets].sort(
+        (first, second) =>
+          first.position - second.position,
+      ),
     [widgets],
   );
 
+  function updateWeatherLocation(
+    location: WeatherLocationSelection,
+  ) {
+    if (!weatherSource) {
+      return;
+    }
+
+    setSources((current) =>
+      current.map((source) =>
+        source.id === weatherSource.id
+          ? {
+              ...source,
+              label: location.label,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              timezone: location.timezone,
+            }
+          : source,
+      ),
+    );
+  }
+
   function addWidget(definition: WidgetDefinition) {
-    const nextWidget = createWidget(definition, mockSources);
+    const nextWidget = createWidget(definition, sources);
 
     setWidgets((current) => [
       ...current,
@@ -53,14 +112,21 @@ export function DashboardBuilder() {
 
   function removeWidget(id: string) {
     setWidgets((current) =>
-      normalizePositions(current.filter((widget) => widget.id !== id)),
+      normalizePositions(
+        current.filter((widget) => widget.id !== id),
+      ),
     );
   }
 
   function moveWidget(id: string, direction: -1 | 1) {
     setWidgets((current) => {
-      const ordered = [...current].sort((a, b) => a.position - b.position);
-      const currentIndex = ordered.findIndex((widget) => widget.id === id);
+      const ordered = [...current].sort(
+        (first, second) =>
+          first.position - second.position,
+      );
+      const currentIndex = ordered.findIndex(
+        (widget) => widget.id === id,
+      );
       const targetIndex = currentIndex + direction;
 
       if (
@@ -80,7 +146,10 @@ export function DashboardBuilder() {
     });
   }
 
-  function changeWidgetSize(id: string, size: WidgetSize) {
+  function changeWidgetSize(
+    id: string,
+    size: WidgetSize,
+  ) {
     setWidgets((current) =>
       current.map((widget) =>
         widget.id === id ? { ...widget, size } : widget,
@@ -99,7 +168,9 @@ export function DashboardBuilder() {
             >
               Fishing Forecast
             </Link>
-            <h1 className="mt-1 text-2xl font-semibold">Dashboard Builder</h1>
+            <h1 className="mt-1 text-2xl font-semibold">
+              Dashboard Builder
+            </h1>
           </div>
 
           <button
@@ -113,7 +184,7 @@ export function DashboardBuilder() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[340px_minmax(0,1fr)]">
         <aside className="space-y-5">
           <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <label
@@ -125,26 +196,64 @@ export function DashboardBuilder() {
             <input
               id="dashboard-name"
               value={dashboardName}
-              onChange={(event) => setDashboardName(event.target.value)}
+              onChange={(event) =>
+                setDashboardName(event.target.value)
+              }
               className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
             />
+          </section>
 
-            <div className="mt-4 rounded-xl bg-[var(--surface-muted)] p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
-                Mock sources
-              </p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {mockSources.map((source) => (
-                  <li key={source.id}>{source.label}</li>
-                ))}
-              </ul>
-            </div>
+          {weatherSource ? (
+            <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
+              <WeatherSourceEditor
+                source={weatherSource}
+                onLocationChange={updateWeatherLocation}
+              />
+            </section>
+          ) : null}
+
+          <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
+            <h2 className="font-medium">Configured sources</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              Tides, waves, and astronomy remain independent.
+            </p>
+
+            <ul className="mt-3 space-y-2 text-sm">
+              {sources.map((source) => {
+                const weatherState =
+                  source.kind === "weather-location"
+                    ? weatherStates[source.id]
+                    : undefined;
+
+                return (
+                  <li
+                    key={source.id}
+                    className="flex items-start justify-between gap-3 rounded-xl bg-[var(--surface-muted)] p-3"
+                  >
+                    <div>
+                      <p className="font-medium">{source.label}</p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        {sourceKindLabel(source.kind)}
+                      </p>
+                    </div>
+
+                    <SourceStatus
+                      isLive={
+                        source.kind === "weather-location"
+                      }
+                      status={weatherState?.status}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
           </section>
 
           <section className="rounded-2xl border border-[var(--border)] bg-white p-4">
             <h2 className="font-medium">Add widgets</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              Widgets are atomic, but grouped into categories for discovery.
+              Widgets are atomic, but grouped into categories for
+              discovery.
             </p>
 
             <div className="mt-5 space-y-5">
@@ -156,12 +265,17 @@ export function DashboardBuilder() {
 
                   <div className="mt-2 grid gap-2">
                     {widgetDefinitions
-                      .filter((item) => item.category === category)
+                      .filter(
+                        (item) =>
+                          item.category === category,
+                      )
                       .map((definition) => (
                         <button
                           key={definition.key}
                           type="button"
-                          onClick={() => addWidget(definition)}
+                          onClick={() =>
+                            addWidget(definition)
+                          }
                           className="rounded-xl border border-[var(--border)] px-3 py-2 text-left transition hover:border-[var(--accent)] hover:bg-[var(--surface-muted)]"
                         >
                           <span className="block text-sm font-medium">
@@ -191,13 +305,18 @@ export function DashboardBuilder() {
             </div>
 
             <p className="text-sm text-[var(--muted)]">
-              {widgets.length} {widgets.length === 1 ? "widget" : "widgets"}
+              {widgets.length}{" "}
+              {widgets.length === 1
+                ? "widget"
+                : "widgets"}
             </p>
           </div>
 
           {orderedWidgets.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-10 text-center">
-              <h3 className="font-medium">Your dashboard is empty</h3>
+              <h3 className="font-medium">
+                Your dashboard is empty
+              </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">
                 Choose a widget from a category to begin.
               </p>
@@ -206,24 +325,47 @@ export function DashboardBuilder() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               {orderedWidgets.map((widget, index) => {
                 const source =
-                  mockSources.find((item) => item.id === widget.sourceId) ??
-                  mockSources[0];
+                  sources.find(
+                    (item) =>
+                      item.id === widget.sourceId,
+                  ) ?? sources[0];
+
+                if (!source) {
+                  return null;
+                }
 
                 return (
                   <div
                     key={widget.id}
-                    className={sizeClassNames[widget.size]}
+                    className={
+                      sizeClassNames[widget.size]
+                    }
                   >
                     <DashboardWidgetCard
                       widget={widget}
                       source={source}
+                      weatherState={
+                        weatherStates[source.id]
+                      }
                       canMoveUp={index > 0}
-                      canMoveDown={index < orderedWidgets.length - 1}
-                      onMoveUp={() => moveWidget(widget.id, -1)}
-                      onMoveDown={() => moveWidget(widget.id, 1)}
-                      onRemove={() => removeWidget(widget.id)}
+                      canMoveDown={
+                        index <
+                        orderedWidgets.length - 1
+                      }
+                      onMoveUp={() =>
+                        moveWidget(widget.id, -1)
+                      }
+                      onMoveDown={() =>
+                        moveWidget(widget.id, 1)
+                      }
+                      onRemove={() =>
+                        removeWidget(widget.id)
+                      }
                       onSizeChange={(size) =>
-                        changeWidgetSize(widget.id, size)
+                        changeWidgetSize(
+                          widget.id,
+                          size,
+                        )
                       }
                     />
                   </div>
@@ -234,6 +376,35 @@ export function DashboardBuilder() {
         </section>
       </div>
     </main>
+  );
+}
+
+function SourceStatus({
+  isLive,
+  status,
+}: {
+  isLive: boolean;
+  status?: "idle" | "loading" | "success" | "error";
+}) {
+  if (!isLive) {
+    return (
+      <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-[var(--muted)]">
+        Mock
+      </span>
+    );
+  }
+
+  const labels = {
+    idle: "Waiting",
+    loading: "Loading",
+    success: "Live",
+    error: "Error",
+  } as const;
+
+  return (
+    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs text-[var(--muted)]">
+      {labels[status ?? "idle"]}
+    </span>
   );
 }
 
@@ -248,7 +419,8 @@ function createWidget(
   sources: DashboardSource[],
 ): WidgetInstance {
   const source = sources.find(
-    (candidate) => candidate.kind === definition.sourceKind,
+    (candidate) =>
+      candidate.kind === definition.sourceKind,
   );
 
   if (!source) {
@@ -277,7 +449,9 @@ function createId(): string {
     return globalThis.crypto.randomUUID();
   }
 
-  return `widget-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `widget-${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
 }
 
 function normalizePositions(
@@ -287,4 +461,20 @@ function normalizePositions(
     ...widget,
     position: index,
   }));
+}
+
+function sourceKindLabel(
+  kind: DashboardSource["kind"],
+): string {
+  const labels: Record<
+    DashboardSource["kind"],
+    string
+  > = {
+    "weather-location": "Weather & wind location",
+    "tide-station": "Tide station",
+    "marine-location": "Marine coordinate",
+    "astronomy-location": "Moon & sun location",
+  };
+
+  return labels[kind];
 }

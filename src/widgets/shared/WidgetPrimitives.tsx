@@ -61,3 +61,27 @@ export function CompactTimeline({
     </div>
   );
 }
+
+export function WidgetDataMessage({
+  title,
+  detail,
+  tone = "neutral",
+}: {
+  title: string;
+  detail: string;
+  tone?: "neutral" | "error";
+}) {
+  return (
+    <div
+      className={
+        tone === "error"
+          ? "rounded-xl border border-red-200 bg-red-50 p-3 text-red-800"
+          : "rounded-xl bg-[var(--surface-muted)] p-3"
+      }
+      role={tone === "error" ? "alert" : "status"}
+    >
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-sm opacity-80">{detail}</p>
+    </div>
+  );
+}
