@@ -33,16 +33,20 @@ import {
   MoonriseMoonsetWidget,
   SunriseSunsetWidget,
 } from "@/widgets/astronomy/AstronomyWidgets";
+import { RadarWidget } from "@/widgets/radar/RadarWidget";
 
 export const widgetComponents: Record<
   WidgetKey,
   ComponentType<WidgetComponentProps>
 > = {
-  "current-temperature": CurrentTemperatureWidget,
-  "current-conditions": CurrentConditionsWidget,
+  "current-temperature":
+    CurrentTemperatureWidget,
+  "current-conditions":
+    CurrentConditionsWidget,
   "rain-chance": RainChanceWidget,
   "hourly-forecast": HourlyForecastWidget,
   "daily-forecast": DailyForecastWidget,
+  "radar-map": RadarWidget,
   "wind-speed": WindSpeedWidget,
   "wind-gusts": WindGustsWidget,
   "wind-direction": WindDirectionWidget,
@@ -55,9 +59,12 @@ export const widgetComponents: Record<
   "wave-height": WaveHeightWidget,
   "wave-direction": WaveDirectionWidget,
   "wave-period": WavePeriodWidget,
-  "swell-information": SwellInformationWidget,
+  "swell-information":
+    SwellInformationWidget,
   "moon-phase": MoonPhaseWidget,
-  "moon-illumination": MoonIlluminationWidget,
-  "moonrise-moonset": MoonriseMoonsetWidget,
+  "moon-illumination":
+    MoonIlluminationWidget,
+  "moonrise-moonset":
+    MoonriseMoonsetWidget,
   "sunrise-sunset": SunriseSunsetWidget,
 };

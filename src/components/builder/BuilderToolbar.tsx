@@ -7,8 +7,24 @@ import type {
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
-import type { WeatherLocationSelection } from "@/types/geocoding";
-import type { WidgetDefinition } from "@/widgets/types";
+import type {
+  WeatherLocationSelection,
+} from "@/types/geocoding";
+import type {
+  AstronomySourceStateMap,
+  MarineSourceStateMap,
+  RadarSourceStateMap,
+  TideSourceStateMap,
+} from "@/types/source-data";
+import type {
+  TideStationOption,
+} from "@/types/tide-stations";
+import type {
+  WeatherSourceStateMap,
+} from "@/types/weather";
+import type {
+  WidgetDefinition,
+} from "@/widgets/types";
 import { LayoutPanel } from "@/components/builder/LayoutPanel";
 import { WidgetLibraryPanel } from "@/components/builder/WidgetLibraryPanel";
 import { SourcesPanel } from "@/components/builder/SourcesPanel";
@@ -25,7 +41,13 @@ export function BuilderToolbar({
   onPanelChange,
   layouts,
   activeLayout,
+  widgets,
   sources,
+  weatherStates,
+  tideStates,
+  marineStates,
+  astronomyStates,
+  radarStates,
   selectedWidget,
   selectedPlacement,
   onSelectLayout,
@@ -36,29 +58,55 @@ export function BuilderToolbar({
   onResetLayout,
   onAddWidget,
   onWeatherLocationChange,
+  onAddTideSource,
+  onRemoveSource,
   onUpdateWidget,
   onUpdatePlacement,
   onDuplicateWidget,
   onRemoveWidget,
 }: {
   panel: BuilderPanel;
-  onPanelChange: (panel: BuilderPanel) => void;
+  onPanelChange: (
+    panel: BuilderPanel,
+  ) => void;
   layouts: DashboardLayout[];
   activeLayout: DashboardLayout;
+  widgets: WidgetInstance[];
   sources: DashboardSource[];
+  weatherStates: WeatherSourceStateMap;
+  tideStates: TideSourceStateMap;
+  marineStates: MarineSourceStateMap;
+  astronomyStates: AstronomySourceStateMap;
+  radarStates: RadarSourceStateMap;
   selectedWidget?: WidgetInstance;
   selectedPlacement?: WidgetPlacement;
-  onSelectLayout: (layoutId: string) => void;
-  onCreateLayout: (device: LayoutDevice) => void;
-  onDeleteLayout: (layoutId: string) => void;
-  onApplyLayoutPreset: (presetKey: string) => void;
+  onSelectLayout: (
+    layoutId: string,
+  ) => void;
+  onCreateLayout: (
+    device: LayoutDevice,
+  ) => void;
+  onDeleteLayout: (
+    layoutId: string,
+  ) => void;
+  onApplyLayoutPreset: (
+    presetKey: string,
+  ) => void;
   onUpdateLayout: (
     updates: Partial<DashboardLayout>,
   ) => void;
   onResetLayout: () => void;
-  onAddWidget: (definition: WidgetDefinition) => void;
+  onAddWidget: (
+    definition: WidgetDefinition,
+  ) => void;
   onWeatherLocationChange: (
     location: WeatherLocationSelection,
+  ) => void;
+  onAddTideSource: (
+    station: TideStationOption,
+  ) => void;
+  onRemoveSource: (
+    sourceId: string,
   ) => void;
   onUpdateWidget: (
     updates: Partial<WidgetInstance>,
@@ -74,25 +122,33 @@ export function BuilderToolbar({
       <nav className="grid grid-cols-4 border-b border-[var(--border)] p-2">
         <PanelButton
           active={panel === "layouts"}
-          onClick={() => onPanelChange("layouts")}
+          onClick={() =>
+            onPanelChange("layouts")
+          }
         >
           Layouts
         </PanelButton>
         <PanelButton
           active={panel === "widgets"}
-          onClick={() => onPanelChange("widgets")}
+          onClick={() =>
+            onPanelChange("widgets")
+          }
         >
           Widgets
         </PanelButton>
         <PanelButton
           active={panel === "sources"}
-          onClick={() => onPanelChange("sources")}
+          onClick={() =>
+            onPanelChange("sources")
+          }
         >
           Sources
         </PanelButton>
         <PanelButton
           active={panel === "selected"}
-          onClick={() => onPanelChange("selected")}
+          onClick={() =>
+            onPanelChange("selected")
+          }
         >
           Selected
         </PanelButton>
@@ -106,22 +162,38 @@ export function BuilderToolbar({
             onSelectLayout={onSelectLayout}
             onCreateLayout={onCreateLayout}
             onDeleteLayout={onDeleteLayout}
-            onApplyPreset={onApplyLayoutPreset}
+            onApplyPreset={
+              onApplyLayoutPreset
+            }
             onUpdateLayout={onUpdateLayout}
             onResetLayout={onResetLayout}
           />
         ) : null}
 
         {panel === "widgets" ? (
-          <WidgetLibraryPanel onAddWidget={onAddWidget} />
+          <WidgetLibraryPanel
+            onAddWidget={onAddWidget}
+          />
         ) : null}
 
         {panel === "sources" ? (
           <SourcesPanel
             sources={sources}
+            widgets={widgets}
+            weatherStates={weatherStates}
+            tideStates={tideStates}
+            marineStates={marineStates}
+            astronomyStates={
+              astronomyStates
+            }
+            radarStates={radarStates}
             onWeatherLocationChange={
               onWeatherLocationChange
             }
+            onAddTideSource={
+              onAddTideSource
+            }
+            onRemoveSource={onRemoveSource}
           />
         ) : null}
 
@@ -132,7 +204,9 @@ export function BuilderToolbar({
             activeLayout={activeLayout}
             sources={sources}
             onUpdateWidget={onUpdateWidget}
-            onUpdatePlacement={onUpdatePlacement}
+            onUpdatePlacement={
+              onUpdatePlacement
+            }
             onDuplicate={onDuplicateWidget}
             onRemove={onRemoveWidget}
           />

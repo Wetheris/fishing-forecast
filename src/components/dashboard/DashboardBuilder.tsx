@@ -4,13 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import type {
   DashboardLayout,
+  DashboardSource,
   FishingDashboard,
   LayoutDevice,
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
 import type { WeatherLocationSelection } from "@/types/geocoding";
+import type { TideStationOption } from "@/types/tide-stations";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
+import {
+  useAstronomySources,
+  useMarineSources,
+  useRadarSources,
+  useTideSources,
+} from "@/hooks/useLiveSources";
 import {
   addWidgetToLayout,
   applyPreset,
@@ -51,6 +59,18 @@ export function DashboardBuilder() {
   const [showGrid, setShowGrid] = useState(true);
 
   const weatherStates = useWeatherSources(
+    dashboard.sources,
+  );
+  const tideStates = useTideSources(
+    dashboard.sources,
+  );
+  const marineStates = useMarineSources(
+    dashboard.sources,
+  );
+  const astronomyStates = useAstronomySources(
+    dashboard.sources,
+  );
+  const radarStates = useRadarSources(
     dashboard.sources,
   );
 
@@ -285,6 +305,82 @@ export function DashboardBuilder() {
     setPanel("widgets");
   }
 
+
+  function addTideSource(
+    station: TideStationOption,
+  ) {
+    setDashboard((current) => {
+      const alreadyExists =
+        current.sources.some(
+          (source) =>
+            source.kind === "tide-station" &&
+            source.externalId === station.id,
+        );
+
+      if (alreadyExists) {
+        return current;
+      }
+
+      const weatherSource =
+        current.sources.find(
+          (source) =>
+            source.kind ===
+            "weather-location",
+        );
+
+      const source: DashboardSource = {
+        id: `tide-${station.id}-${createId()}`,
+        kind: "tide-station",
+        providerKey: "noaa-coops",
+        label: station.label,
+        latitude: station.latitude,
+        longitude: station.longitude,
+        timezone:
+          weatherSource?.timezone ??
+          "America/New_York",
+        externalId: station.id,
+        settings: {
+          datum: "MLLW",
+          units: "english",
+          distanceMiles:
+            station.distanceMiles,
+          tideType: station.tideType,
+          supportsDetailedPredictions:
+            station.supportsDetailedPredictions,
+        },
+      };
+
+      return {
+        ...current,
+        sources: [
+          ...current.sources,
+          source,
+        ],
+      };
+    });
+  }
+
+  function removeSource(sourceId: string) {
+    setDashboard((current) => {
+      const isUsed = current.widgets.some(
+        (widget) =>
+          widget.sourceId === sourceId,
+      );
+
+      if (isUsed) {
+        return current;
+      }
+
+      return {
+        ...current,
+        sources: current.sources.filter(
+          (source) =>
+            source.id !== sourceId,
+        ),
+      };
+    });
+  }
+
   function updateWeatherLocation(
     location: WeatherLocationSelection,
   ) {
@@ -365,7 +461,13 @@ export function DashboardBuilder() {
           onPanelChange={setPanel}
           layouts={dashboard.layouts}
           activeLayout={activeLayout}
+          widgets={dashboard.widgets}
           sources={dashboard.sources}
+          weatherStates={weatherStates}
+          tideStates={tideStates}
+          marineStates={marineStates}
+          astronomyStates={astronomyStates}
+          radarStates={radarStates}
           selectedWidget={selectedWidget}
           selectedPlacement={selectedPlacement}
           onSelectLayout={(layoutId) => {
@@ -382,6 +484,8 @@ export function DashboardBuilder() {
           onWeatherLocationChange={
             updateWeatherLocation
           }
+          onAddTideSource={addTideSource}
+          onRemoveSource={removeSource}
           onUpdateWidget={updateSelectedWidget}
           onUpdatePlacement={
             updateSelectedPlacement
@@ -397,6 +501,10 @@ export function DashboardBuilder() {
           widgets={dashboard.widgets}
           sources={dashboard.sources}
           weatherStates={weatherStates}
+          tideStates={tideStates}
+          marineStates={marineStates}
+          astronomyStates={astronomyStates}
+          radarStates={radarStates}
           mode={mode}
           zoom={zoom}
           showGrid={showGrid}
@@ -410,4 +518,19 @@ export function DashboardBuilder() {
       </div>
     </main>
   );
+}
+
+function createId(): string {
+  if (
+    typeof globalThis.crypto !== "undefined" &&
+    "randomUUID" in globalThis.crypto
+  ) {
+    return globalThis.crypto
+      .randomUUID()
+      .slice(0, 8);
+  }
+
+  return Math.random()
+    .toString(16)
+    .slice(2, 10);
 }

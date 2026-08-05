@@ -1,23 +1,21 @@
 "use client";
 
 import { useId } from "react";
-
-type TideEvent = {
-  type: string;
-  time: string;
-  heightFt: number;
-};
+import type {
+  TideEvent,
+  TideTimelinePoint,
+} from "@/types/source-data";
 
 export function TideChart({
   events,
-  status,
-  minutesUntilTurn,
+  timeline,
+  currentLocalTime,
   showCurrentMarker,
   showHighLowLabels,
 }: {
   events: TideEvent[];
-  status: string;
-  minutesUntilTurn: number;
+  timeline: TideTimelinePoint[];
+  currentLocalTime: string;
   showCurrentMarker: boolean;
   showHighLowLabels: boolean;
 }) {
@@ -31,7 +29,15 @@ export function TideChart({
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
 
-  if (events.length < 2) {
+  const series =
+    timeline.length >= 2
+      ? timeline
+      : events.map((event) => ({
+          localTime: event.localTime,
+          heightFt: event.heightFt,
+        }));
+
+  if (series.length < 2) {
     return (
       <p className="text-sm text-[var(--muted)]">
         More tide predictions are needed to draw the chart.
@@ -39,16 +45,16 @@ export function TideChart({
     );
   }
 
-  const timedEvents = addContinuousMinutes(events);
-  const firstMinute = timedEvents[0].minute;
-  const lastMinute =
-    timedEvents.at(-1)?.minute ?? firstMinute + 1;
-  const duration = Math.max(
-    1,
-    lastMinute - firstMinute,
+  const firstTime = localKeyToMilliseconds(
+    series[0].localTime,
   );
-  const heights = events.map(
-    (event) => event.heightFt,
+  const lastTime = localKeyToMilliseconds(
+    series.at(-1)?.localTime ??
+      series[0].localTime,
+  );
+  const duration = Math.max(1, lastTime - firstTime);
+  const heights = series.map(
+    (point) => point.heightFt,
   );
   const minimum = Math.min(...heights);
   const maximum = Math.max(...heights);
@@ -63,37 +69,52 @@ export function TideChart({
     displayMaximum - displayMinimum,
   );
 
-  const points = timedEvents.map((event) => ({
-    ...event,
+  const chartPoints = series.map((point) => ({
+    ...point,
     x:
       left +
-      ((event.minute - firstMinute) / duration) *
+      ((localKeyToMilliseconds(point.localTime) -
+        firstTime) /
+        duration) *
         chartWidth,
     y:
       top +
-      ((displayMaximum - event.heightFt) / range) *
+      ((displayMaximum - point.heightFt) / range) *
         chartHeight,
   }));
 
-  const linePath = buildTidePath(points);
+  const eventPoints = events
+    .filter(
+      (event) =>
+        localKeyToMilliseconds(event.localTime) >=
+          firstTime &&
+        localKeyToMilliseconds(event.localTime) <=
+          lastTime,
+    )
+    .map((event) => ({
+      ...event,
+      x:
+        left +
+        ((localKeyToMilliseconds(event.localTime) -
+          firstTime) /
+          duration) *
+          chartWidth,
+      y:
+        top +
+        ((displayMaximum - event.heightFt) / range) *
+          chartHeight,
+    }));
+
+  const linePath = buildPath(chartPoints);
   const baseY = top + chartHeight;
   const areaPath = `${linePath} L ${
-    points.at(-1)?.x ?? left
-  } ${baseY} L ${points[0].x} ${baseY} Z`;
+    chartPoints.at(-1)?.x ?? left
+  } ${baseY} L ${chartPoints[0].x} ${baseY} Z`;
 
-  const currentPoint = calculateCurrentPoint({
-    points,
-    status,
-    minutesUntilTurn,
-    firstMinute,
-    duration,
-    left,
-    chartWidth,
-    top,
-    chartHeight,
-    displayMinimum,
-    displayMaximum,
-  });
+  const currentPoint = interpolateCurrentPoint(
+    chartPoints,
+    currentLocalTime,
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full items-center justify-center overflow-hidden">
@@ -101,7 +122,7 @@ export function TideChart({
         viewBox={`0 0 ${width} ${height}`}
         className="block h-auto max-h-full w-full max-w-[1120px]"
         role="img"
-        aria-label="Tide height curve showing upcoming high and low tide predictions"
+        aria-label="NOAA tide prediction curve showing upcoming high and low tides"
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
@@ -145,11 +166,12 @@ export function TideChart({
           stroke="var(--accent-strong)"
           strokeWidth="4"
           strokeLinecap="round"
+          strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
 
-        {points.map((point) => (
-          <g key={`${point.type}-${point.time}`}>
+        {eventPoints.map((point) => (
+          <g key={`${point.type}-${point.localTime}`}>
             <circle
               cx={point.x}
               cy={point.y}
@@ -164,8 +186,7 @@ export function TideChart({
               <text
                 x={point.x}
                 y={
-                  point.type.toLowerCase() ===
-                  "high"
+                  point.type === "high"
                     ? Math.max(19, point.y - 16)
                     : Math.min(
                         baseY - 8,
@@ -180,7 +201,9 @@ export function TideChart({
                 stroke="white"
                 strokeWidth="4"
               >
-                {point.type}{" "}
+                {point.type === "high"
+                  ? "High"
+                  : "Low"}{" "}
                 {point.heightFt.toFixed(1)} ft
               </text>
             ) : null}
@@ -192,7 +215,7 @@ export function TideChart({
               fontSize="14"
               fill="var(--muted)"
             >
-              {point.time}
+              {point.displayTime}
             </text>
           </g>
         ))}
@@ -236,56 +259,13 @@ export function TideChart({
   );
 }
 
-function addContinuousMinutes(events: TideEvent[]) {
-  let dayOffset = 0;
-  let previousMinute = -1;
-
-  return events.map((event) => {
-    const parsed = parseClockTime(event.time);
-    let minute = parsed + dayOffset;
-
-    if (
-      previousMinute >= 0 &&
-      minute <= previousMinute
-    ) {
-      dayOffset += 24 * 60;
-      minute = parsed + dayOffset;
-    }
-
-    previousMinute = minute;
-
-    return {
-      ...event,
-      minute,
-    };
-  });
-}
-
-function parseClockTime(time: string): number {
-  const match = time
-    .trim()
-    .match(
-      /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i,
-    );
-
-  if (!match) {
-    return 0;
-  }
-
-  let hour = Number(match[1]) % 12;
-  const minute = Number(match[2]);
-  const period = match[3].toUpperCase();
-
-  if (period === "PM") {
-    hour += 12;
-  }
-
-  return hour * 60 + minute;
-}
-
-function buildTidePath(
+function buildPath(
   points: Array<{ x: number; y: number }>,
 ): string {
+  if (points.length === 0) {
+    return "";
+  }
+
   let path = `M ${points[0].x} ${points[0].y}`;
 
   for (
@@ -304,88 +284,73 @@ function buildTidePath(
   return path;
 }
 
-function calculateCurrentPoint({
-  points,
-  status,
-  minutesUntilTurn,
-  firstMinute,
-  duration,
-  left,
-  chartWidth,
-  top,
-  chartHeight,
-  displayMinimum,
-  displayMaximum,
-}: {
+function interpolateCurrentPoint(
   points: Array<{
-    type: string;
-    minute: number;
-    heightFt: number;
-  }>;
-  status: string;
-  minutesUntilTurn: number;
-  firstMinute: number;
-  duration: number;
-  left: number;
-  chartWidth: number;
-  top: number;
-  chartHeight: number;
-  displayMinimum: number;
-  displayMaximum: number;
-}): { x: number; y: number } | null {
-  const desiredType = status
-    .toLowerCase()
-    .includes("rising")
-    ? "high"
-    : "low";
-
-  const nextIndex = points.findIndex(
-    (point, index) =>
-      index > 0 &&
-      point.type.toLowerCase() ===
-        desiredType,
+    localTime: string;
+    x: number;
+    y: number;
+  }>,
+  currentLocalTime: string,
+): { x: number; y: number } | null {
+  const currentTime = localKeyToMilliseconds(
+    currentLocalTime,
   );
 
-  if (nextIndex <= 0) {
-    return null;
+  for (
+    let index = 0;
+    index < points.length - 1;
+    index += 1
+  ) {
+    const previous = points[index];
+    const next = points[index + 1];
+    const previousTime = localKeyToMilliseconds(
+      previous.localTime,
+    );
+    const nextTime = localKeyToMilliseconds(
+      next.localTime,
+    );
+
+    if (
+      currentTime >= previousTime &&
+      currentTime <= nextTime
+    ) {
+      const range = Math.max(
+        1,
+        nextTime - previousTime,
+      );
+      const progress =
+        (currentTime - previousTime) / range;
+
+      return {
+        x:
+          previous.x +
+          (next.x - previous.x) * progress,
+        y:
+          previous.y +
+          (next.y - previous.y) * progress,
+      };
+    }
   }
 
-  const previous = points[nextIndex - 1];
-  const next = points[nextIndex];
-  const currentMinute =
-    next.minute - minutesUntilTurn;
-  const interval = Math.max(
-    1,
-    next.minute - previous.minute,
-  );
-  const progress = Math.min(
-    1,
-    Math.max(
-      0,
-      (currentMinute - previous.minute) /
-        interval,
-    ),
-  );
-  const smoothProgress =
-    progress * progress * (3 - 2 * progress);
-  const height =
-    previous.heightFt +
-    (next.heightFt - previous.heightFt) *
-      smoothProgress;
+  return null;
+}
 
-  const x =
-    left +
-    ((currentMinute - firstMinute) /
-      duration) *
-      chartWidth;
-  const range = Math.max(
-    0.1,
-    displayMaximum - displayMinimum,
+function localKeyToMilliseconds(
+  localTime: string,
+): number {
+  const match = localTime.match(
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/,
   );
-  const y =
-    top +
-    ((displayMaximum - height) / range) *
-      chartHeight;
 
-  return { x, y };
+  if (!match) {
+    return 0;
+  }
+
+  return Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+  );
 }

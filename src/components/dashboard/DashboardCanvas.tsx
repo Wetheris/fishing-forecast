@@ -15,6 +15,12 @@ import type {
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
+import type {
+  AstronomySourceStateMap,
+  MarineSourceStateMap,
+  RadarSourceStateMap,
+  TideSourceStateMap,
+} from "@/types/source-data";
 import type { WeatherSourceStateMap } from "@/types/weather";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 import { WidgetShell } from "@/components/dashboard/WidgetShell";
@@ -24,6 +30,10 @@ export function DashboardCanvas({
   widgets,
   sources,
   weatherStates,
+  tideStates,
+  marineStates,
+  astronomyStates,
+  radarStates,
   mode,
   scale,
   showGrid,
@@ -35,6 +45,10 @@ export function DashboardCanvas({
   widgets: WidgetInstance[];
   sources: DashboardSource[];
   weatherStates: WeatherSourceStateMap;
+  tideStates: TideSourceStateMap;
+  marineStates: MarineSourceStateMap;
+  astronomyStates: AstronomySourceStateMap;
+  radarStates: RadarSourceStateMap;
   mode: "edit" | "view";
   scale: number;
   showGrid: boolean;
@@ -96,7 +110,9 @@ export function DashboardCanvas({
       }
     : undefined;
 
-  function handleLayoutChange(nextLayout: Layout) {
+  function handleLayoutChange(
+    nextLayout: Layout,
+  ) {
     if (!onPlacementsChange) {
       return;
     }
@@ -105,8 +121,8 @@ export function DashboardCanvas({
       nextLayout.map((item) => [item.i, item]),
     );
 
-    const nextPlacements = layout.placements.map(
-      (placement) => {
+    const nextPlacements =
+      layout.placements.map((placement) => {
         const next = nextById.get(
           placement.widgetId,
         );
@@ -114,14 +130,8 @@ export function DashboardCanvas({
         return next
           ? toPlacement(next, placement)
           : placement;
-      },
-    );
+      });
 
-    /*
-     * React Grid Layout may report the same layout again after a scale
-     * or container measurement changes. Avoiding a redundant parent
-     * state update prevents an unnecessary render/measurement loop.
-     */
     if (
       placementsEqual(
         layout.placements,
@@ -214,14 +224,28 @@ export function DashboardCanvas({
             );
           }
 
+          const weatherState =
+            weatherStates[source.id];
+          const tideState = tideStates[source.id];
+          const marineState =
+            marineStates[source.id];
+          const astronomyState =
+            astronomyStates[source.id];
+          const radarState =
+            radarStates[source.id];
+
           return (
             <div key={placement.widgetId}>
               <WidgetShell
                 widget={widget}
                 source={source}
-                weatherState={
-                  weatherStates[source.id]
-                }
+                updatedAt={getUpdatedAt({
+                  weatherState,
+                  tideState,
+                  marineState,
+                  astronomyState,
+                  radarState,
+                })}
                 mode={mode}
                 selected={
                   mode === "edit" &&
@@ -234,9 +258,11 @@ export function DashboardCanvas({
                 <WidgetRenderer
                   widget={widget}
                   source={source}
-                  weatherState={
-                    weatherStates[source.id]
-                  }
+                  weatherState={weatherState}
+                  tideState={tideState}
+                  marineState={marineState}
+                  astronomyState={astronomyState}
+                  radarState={radarState}
                 />
               </WidgetShell>
             </div>
@@ -245,6 +271,38 @@ export function DashboardCanvas({
       </ReactGridLayout>
     </div>
   );
+}
+
+function getUpdatedAt({
+  weatherState,
+  tideState,
+  marineState,
+  astronomyState,
+  radarState,
+}: {
+  weatherState?: WeatherSourceStateMap[string];
+  tideState?: TideSourceStateMap[string];
+  marineState?: MarineSourceStateMap[string];
+  astronomyState?: AstronomySourceStateMap[string];
+  radarState?: RadarSourceStateMap[string];
+}): string | null {
+  if (weatherState?.status === "success") {
+    return weatherState.data.fetchedAt;
+  }
+  if (tideState?.status === "success") {
+    return tideState.data.fetchedAt;
+  }
+  if (marineState?.status === "success") {
+    return marineState.data.fetchedAt;
+  }
+  if (astronomyState?.status === "success") {
+    return astronomyState.data.calculatedAt;
+  }
+  if (radarState?.status === "success") {
+    return radarState.data.fetchedAt;
+  }
+
+  return null;
 }
 
 function toPlacement(

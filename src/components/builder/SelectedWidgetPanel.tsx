@@ -489,6 +489,109 @@ function WidgetSpecificSettings({
     );
   }
 
+
+  if (widget.widgetKey === "radar-map") {
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">
+          Radar
+        </legend>
+
+        <NumberSetting
+          label="Map zoom"
+          value={numberSetting(
+            widget.settings,
+            "zoom",
+            7,
+          )}
+          min={3}
+          max={7}
+          onChange={(value) =>
+            onChange("zoom", value)
+          }
+        />
+
+        <SelectSetting
+          label="Radar opacity"
+          value={String(
+            numberSetting(
+              widget.settings,
+              "opacity",
+              0.72,
+            ),
+          )}
+          options={[
+            ["0.5", "50%"],
+            ["0.72", "72%"],
+            ["0.9", "90%"],
+            ["1", "100%"],
+          ]}
+          onChange={(value) =>
+            onChange(
+              "opacity",
+              Number(value),
+            )
+          }
+        />
+
+        <Checkbox
+          label="Animate recent frames"
+          checked={booleanSetting(
+            widget.settings,
+            "animate",
+            true,
+          )}
+          onChange={(value) =>
+            onChange("animate", value)
+          }
+        />
+
+        {booleanSetting(
+          widget.settings,
+          "animate",
+          true,
+        ) ? (
+          <SelectSetting
+            label="Animation speed"
+            value={String(
+              numberSetting(
+                widget.settings,
+                "frameDurationMs",
+                750,
+              ),
+            )}
+            options={[
+              ["1200", "Slow"],
+              ["750", "Normal"],
+              ["450", "Fast"],
+            ]}
+            onChange={(value) =>
+              onChange(
+                "frameDurationMs",
+                Number(value),
+              )
+            }
+          />
+        ) : null}
+
+        <Checkbox
+          label="Show location marker"
+          checked={booleanSetting(
+            widget.settings,
+            "showLocationMarker",
+            true,
+          )}
+          onChange={(value) =>
+            onChange(
+              "showLocationMarker",
+              value,
+            )
+          }
+        />
+      </fieldset>
+    );
+  }
+
   if (
     widget.widgetKey === "wind-speed" ||
     widget.widgetKey === "wind-gusts" ||

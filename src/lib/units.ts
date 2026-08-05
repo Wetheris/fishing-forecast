@@ -10,6 +10,18 @@ export function metersPerSecondToKnots(value: number): number {
   return value * 1.943844;
 }
 
+export function metersToFeet(value: number): number {
+  return value * 3.28084;
+}
+
+export function feetToMeters(value: number): number {
+  return value / 3.28084;
+}
+
 export function roundMeasurement(value: number): number {
   return Math.round(value);
+}
+
+export function roundToTenth(value: number): number {
+  return Math.round(value * 10) / 10;
 }

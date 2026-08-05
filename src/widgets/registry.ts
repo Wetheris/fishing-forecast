@@ -133,6 +133,39 @@ export const widgetDefinitions: WidgetDefinition[] = [
     },
     defaultPlacement: placements(timelineDesktop, timelineMobile),
   },
+
+  {
+    key: "radar-map",
+    name: "Weather Radar",
+    description:
+      "Animated recent precipitation radar around a selected location.",
+    category: "weather",
+    sourceKind: "weather-location",
+    defaultTitle: "Weather Radar",
+    defaultSettings: {
+      zoom: 7,
+      opacity: 0.72,
+      animate: true,
+      frameDurationMs: 750,
+      showLocationMarker: true,
+      showSourceLabel: true,
+      showLastUpdated: true,
+    },
+    defaultPlacement: placements(
+      {
+        w: 6,
+        h: 5,
+        minW: 4,
+        minH: 4,
+      },
+      {
+        w: 4,
+        h: 5,
+        minW: 4,
+        minH: 4,
+      },
+    ),
+  },
   {
     key: "wind-speed",
     name: "Wind Speed",

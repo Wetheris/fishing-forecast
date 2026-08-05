@@ -3,13 +3,12 @@ import type {
   DashboardSource,
   WidgetInstance,
 } from "@/types/dashboard";
-import type { WeatherSourceState } from "@/types/weather";
 import { booleanSetting } from "@/lib/widget-settings";
 
 export function WidgetShell({
   widget,
   source,
-  weatherState,
+  updatedAt,
   mode,
   selected,
   onSelect,
@@ -17,7 +16,7 @@ export function WidgetShell({
 }: {
   widget: WidgetInstance;
   source: DashboardSource;
-  weatherState?: WeatherSourceState;
+  updatedAt?: string | null;
   mode: "edit" | "view";
   selected: boolean;
   onSelect?: () => void;
@@ -34,11 +33,6 @@ export function WidgetShell({
     false,
   );
 
-  const updatedAt =
-    weatherState?.status === "success"
-      ? weatherState.data.fetchedAt
-      : null;
-
   return (
     <article
       className={[
@@ -47,7 +41,9 @@ export function WidgetShell({
           ? "border-[var(--accent)] ring-2 ring-[var(--selection)]"
           : "border-[var(--border)]",
       ].join(" ")}
-      onMouseDown={mode === "edit" ? onSelect : undefined}
+      onMouseDown={
+        mode === "edit" ? onSelect : undefined
+      }
     >
       <header className="flex min-h-14 items-start justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <div className="min-w-0">

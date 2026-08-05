@@ -6,7 +6,15 @@ import type {
   WidgetInstance,
   WidgetKey,
 } from "@/types/dashboard";
-import type { WeatherSourceState } from "@/types/weather";
+import type {
+  AstronomySourceState,
+  MarineSourceState,
+  RadarSourceState,
+  TideSourceState,
+} from "@/types/source-data";
+import type {
+  WeatherSourceState,
+} from "@/types/weather";
 
 export type DefaultPlacement = {
   w: number;
@@ -23,11 +31,18 @@ export type WidgetDefinition = {
   sourceKind: SourceKind;
   defaultTitle: string;
   defaultSettings: Record<string, unknown>;
-  defaultPlacement: Record<LayoutDevice, DefaultPlacement>;
+  defaultPlacement: Record<
+    LayoutDevice,
+    DefaultPlacement
+  >;
 };
 
 export type WidgetComponentProps = {
   widget: WidgetInstance;
   source: DashboardSource;
   weatherState?: WeatherSourceState;
+  tideState?: TideSourceState;
+  marineState?: MarineSourceState;
+  astronomyState?: AstronomySourceState;
+  radarState?: RadarSourceState;
 };

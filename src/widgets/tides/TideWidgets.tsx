@@ -1,55 +1,104 @@
-import { mockForecast } from "@/lib/mock-data";
 import type { WidgetComponentProps } from "@/widgets/types";
 import {
   CompactTimeline,
   DataList,
   MetricValue,
 } from "@/widgets/shared/WidgetPrimitives";
+import { LiveDataView } from "@/widgets/shared/LiveDataView";
 import { TideChart } from "@/widgets/tides/TideChart";
 import {
   booleanSetting,
   stringSetting,
 } from "@/lib/widget-settings";
+import {
+  feetToMeters,
+  roundToTenth,
+} from "@/lib/units";
 
 export function NextHighTideWidget({
-  source,
+  widget,
+  tideState,
 }: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={mockForecast.tides.nextHigh.time}
-      detail={`${mockForecast.tides.nextHigh.heightFt} ft · ${source.label}`}
-    />
+    <LiveDataView
+      state={tideState}
+      sourceName="NOAA tides"
+      loadingDetail="Fetching the latest NOAA tide predictions."
+    >
+      {(data) =>
+        data.nextHigh ? (
+          <MetricValue
+            value={data.nextHigh.displayTime}
+            detail={formatHeight(
+              data.nextHigh.heightFt,
+              widget,
+            )}
+          />
+        ) : (
+          <MetricValue
+            value="Unavailable"
+            detail="No upcoming high tide was returned."
+          />
+        )
+      }
+    </LiveDataView>
   );
 }
 
 export function NextLowTideWidget({
-  source,
+  widget,
+  tideState,
 }: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={mockForecast.tides.nextLow.time}
-      detail={`${mockForecast.tides.nextLow.heightFt} ft · ${source.label}`}
-    />
+    <LiveDataView
+      state={tideState}
+      sourceName="NOAA tides"
+      loadingDetail="Fetching the latest NOAA tide predictions."
+    >
+      {(data) =>
+        data.nextLow ? (
+          <MetricValue
+            value={data.nextLow.displayTime}
+            detail={formatHeight(
+              data.nextLow.heightFt,
+              widget,
+            )}
+          />
+        ) : (
+          <MetricValue
+            value="Unavailable"
+            detail="No upcoming low tide was returned."
+          />
+        )
+      }
+    </LiveDataView>
   );
 }
 
-export function TideStatusWidget() {
-  const hours = Math.floor(
-    mockForecast.tides.minutesUntilTurn / 60,
-  );
-  const minutes =
-    mockForecast.tides.minutesUntilTurn % 60;
-
+export function TideStatusWidget({
+  tideState,
+}: WidgetComponentProps) {
   return (
-    <MetricValue
-      value={mockForecast.tides.status}
-      detail={`${hours} hr ${minutes} min until high tide`}
-    />
+    <LiveDataView
+      state={tideState}
+      sourceName="NOAA tides"
+      loadingDetail="Determining the current tide movement."
+    >
+      {(data) => (
+        <MetricValue
+          value={capitalize(data.currentTrend)}
+          detail={formatTurnCountdown(
+            data.minutesUntilTurn,
+          )}
+        />
+      )}
+    </LiveDataView>
   );
 }
 
 export function TideTimelineWidget({
   widget,
+  tideState,
 }: WidgetComponentProps) {
   const displayMode = stringSetting(
     widget.settings,
@@ -67,50 +116,130 @@ export function TideTimelineWidget({
     true,
   );
 
-  if (displayMode === "chart") {
-    return (
-      <TideChart
-        events={mockForecast.tides.events}
-        status={mockForecast.tides.status}
-        minutesUntilTurn={
-          mockForecast.tides.minutesUntilTurn
-        }
-        showCurrentMarker={showCurrentMarker}
-        showHighLowLabels={showHighLowLabels}
-      />
-    );
-  }
-
   return (
-    <CompactTimeline
-      columns={mockForecast.tides.events.map(
-        (event) => ({
-          label: event.type,
-          primary: event.time,
-          secondary: `${event.heightFt} ft`,
-        }),
-      )}
-    />
+    <LiveDataView
+      state={tideState}
+      sourceName="NOAA tides"
+      loadingDetail="Loading high, low, and six-minute predictions."
+    >
+      {(data) =>
+        displayMode === "chart" ? (
+          <TideChart
+            events={data.events}
+            timeline={data.timeline}
+            currentLocalTime={
+              data.currentLocalTime
+            }
+            showCurrentMarker={
+              showCurrentMarker
+            }
+            showHighLowLabels={
+              showHighLowLabels
+            }
+          />
+        ) : (
+          <CompactTimeline
+            columns={data.events
+              .filter(
+                (event) =>
+                  event.localTime >
+                  data.currentLocalTime,
+              )
+              .slice(0, 4)
+              .map((event) => ({
+                label:
+                  event.type === "high"
+                    ? "High"
+                    : "Low",
+                primary: event.displayTime,
+                secondary: formatHeight(
+                  event.heightFt,
+                  widget,
+                ),
+              }))}
+          />
+        )
+      }
+    </LiveDataView>
   );
 }
 
-export function TideStationWidget() {
+export function TideStationWidget({
+  tideState,
+}: WidgetComponentProps) {
   return (
-    <DataList
-      rows={[
-        {
-          label: "Station",
-          value: mockForecast.tides.stationName,
-        },
-        {
-          label: "NOAA ID",
-          value: mockForecast.tides.stationId,
-        },
-        {
-          label: "Distance",
-          value: `${mockForecast.tides.distanceMiles} miles`,
-        },
-      ]}
-    />
+    <LiveDataView
+      state={tideState}
+      sourceName="NOAA station"
+      loadingDetail="Loading NOAA station metadata."
+    >
+      {(data) => (
+        <DataList
+          rows={[
+            {
+              label: "Station",
+              value: data.station.name,
+            },
+            {
+              label: "NOAA ID",
+              value: data.station.id,
+            },
+            {
+              label: "Datum",
+              value: data.datum,
+            },
+            ...(data.station.distanceMiles !== null
+              ? [
+                  {
+                    label: "Distance",
+                    value: `${roundToTenth(
+                      data.station.distanceMiles,
+                    )} miles`,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+    </LiveDataView>
   );
+}
+
+function formatHeight(
+  heightFt: number,
+  widget: WidgetComponentProps["widget"],
+): string {
+  const unit = stringSetting(
+    widget.settings,
+    "heightUnit",
+    "feet",
+  );
+
+  return unit === "meters"
+    ? `${roundToTenth(
+        feetToMeters(heightFt),
+      )} m`
+    : `${roundToTenth(heightFt)} ft`;
+}
+
+function formatTurnCountdown(
+  minutes: number | null,
+): string | undefined {
+  if (minutes === null) {
+    return undefined;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (hours === 0) {
+    return `${remainder} min until the next turn`;
+  }
+
+  return `${hours} hr ${remainder} min until the next turn`;
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() +
+    value.slice(1);
 }

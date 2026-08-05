@@ -7,6 +7,12 @@ import type {
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
+import type {
+  AstronomySourceStateMap,
+  MarineSourceStateMap,
+  RadarSourceStateMap,
+  TideSourceStateMap,
+} from "@/types/source-data";
 import type { WeatherSourceStateMap } from "@/types/weather";
 import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
 
@@ -20,6 +26,10 @@ export function BuilderPreview({
   widgets,
   sources,
   weatherStates,
+  tideStates,
+  marineStates,
+  astronomyStates,
+  radarStates,
   mode,
   zoom,
   showGrid,
@@ -34,6 +44,10 @@ export function BuilderPreview({
   widgets: WidgetInstance[];
   sources: DashboardSource[];
   weatherStates: WeatherSourceStateMap;
+  tideStates: TideSourceStateMap;
+  marineStates: MarineSourceStateMap;
+  astronomyStates: AstronomySourceStateMap;
+  radarStates: RadarSourceStateMap;
   mode: "edit" | "view";
   zoom: PreviewZoom;
   showGrid: boolean;
@@ -226,6 +240,10 @@ export function BuilderPreview({
                 widgets={widgets}
                 sources={sources}
                 weatherStates={weatherStates}
+                tideStates={tideStates}
+                marineStates={marineStates}
+                astronomyStates={astronomyStates}
+                radarStates={radarStates}
                 mode={mode}
                 scale={scale}
                 showGrid={showGrid && mode === "edit"}
