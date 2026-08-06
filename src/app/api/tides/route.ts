@@ -71,14 +71,14 @@ export async function GET(request: NextRequest) {
           station,
           datum,
           beginDate,
-          rangeHours: 96,
+          rangeHours: 192,
           interval: "hilo",
         }),
         fetchNoaaPredictions({
           station,
           datum,
           beginDate,
-          rangeHours: 72,
+          rangeHours: 192,
           interval: "6",
         }).catch((error: unknown) => {
           console.warn(
@@ -116,16 +116,7 @@ export async function GET(request: NextRequest) {
     const futureEvents = allEvents.filter(
       (event) => event.localTime > currentLocalTime,
     );
-    const priorEvent = allEvents
-      .filter(
-        (event) => event.localTime <= currentLocalTime,
-      )
-      .at(-1);
-
-    const events = [
-      ...(priorEvent ? [priorEvent] : []),
-      ...futureEvents.slice(0, 4),
-    ];
+    const events = allEvents;
 
     const nextTurn = futureEvents[0] ?? null;
     const nextHigh =
@@ -149,18 +140,7 @@ export async function GET(request: NextRequest) {
         a.localTime.localeCompare(b.localTime),
       );
 
-    const timelineStart =
-      events[0]?.localTime ?? currentLocalTime;
-    const timelineEnd =
-      events.at(-1)?.localTime ??
-      futureEvents.at(2)?.localTime ??
-      currentLocalTime;
-
-    const timeline = completeTimeline.filter(
-      (point) =>
-        point.localTime >= timelineStart &&
-        point.localTime <= timelineEnd,
-    );
+    const timeline = completeTimeline;
 
     const currentHeightFt =
       interpolateCurrentHeight(

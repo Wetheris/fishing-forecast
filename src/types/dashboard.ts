@@ -12,6 +12,7 @@ export type SourceKind =
   | "astronomy-location";
 
 export type WidgetKey =
+  | "forecast-overview"
   | "current-temperature"
   | "current-conditions"
   | "rain-chance"
@@ -37,6 +38,14 @@ export type WidgetKey =
   | "sunrise-sunset";
 
 export type LayoutDevice = "desktop" | "mobile";
+
+export type DashboardThemeKey =
+  | "light"
+  | "dark"
+  | "neon"
+  | "future"
+  | "beach"
+  | "sunset";
 
 export type DashboardSource = {
   id: string;
@@ -95,6 +104,7 @@ export type FishingDashboard = {
   id: string;
   name: string;
   slug?: string;
+  theme: DashboardThemeKey;
   sources: DashboardSource[];
   widgets: WidgetInstance[];
   layouts: DashboardLayout[];

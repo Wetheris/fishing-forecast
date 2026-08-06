@@ -5,6 +5,7 @@ import Link from "next/link";
 import type {
   DashboardLayout,
   DashboardSource,
+  DashboardThemeKey,
   FishingDashboard,
   LayoutDevice,
   WidgetInstance,
@@ -12,6 +13,7 @@ import type {
 } from "@/types/dashboard";
 import type { WeatherLocationSelection } from "@/types/geocoding";
 import type { TideStationOption } from "@/types/tide-stations";
+import type { ForecastContext } from "@/types/forecast";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
   useAstronomySources,
@@ -32,6 +34,7 @@ import {
   normalizePlacementsForLayout,
 } from "@/lib/dashboard-layouts";
 import type { WidgetDefinition } from "@/widgets/types";
+import { formatForecastDateLabel } from "@/lib/forecast-selection";
 import {
   BuilderToolbar,
   type BuilderPanel,
@@ -57,6 +60,8 @@ export function DashboardBuilder() {
   const [zoom, setZoom] =
     useState<PreviewZoom>("fit");
   const [showGrid, setShowGrid] = useState(true);
+  const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
+    useState<string>();
 
   const weatherStates = useWeatherSources(
     dashboard.sources,
@@ -67,8 +72,53 @@ export function DashboardBuilder() {
   const marineStates = useMarineSources(
     dashboard.sources,
   );
+
+  const primaryWeatherSource =
+    dashboard.sources.find(
+      (source) =>
+        source.kind === "weather-location",
+    );
+  const primaryWeatherState = primaryWeatherSource
+    ? weatherStates[primaryWeatherSource.id]
+    : undefined;
+  const primaryWeatherData =
+    primaryWeatherState?.status === "success"
+      ? primaryWeatherState.data
+      : null;
+  const fallbackTimezone =
+    primaryWeatherSource?.timezone ?? "UTC";
+  const todayDate =
+    primaryWeatherData?.current.time.slice(0, 10) ??
+    dateKeyInTimezone(
+      new Date(),
+      fallbackTimezone,
+    );
+  const availableForecastDates =
+    primaryWeatherData &&
+    primaryWeatherData.daily.length > 0
+      ? primaryWeatherData.daily.map(
+          (day) => day.date,
+        )
+      : [todayDate];
+  const selectedForecastDate =
+    selectedForecastDateOverride &&
+    availableForecastDates.includes(
+      selectedForecastDateOverride,
+    )
+      ? selectedForecastDateOverride
+      : todayDate;
+  const forecastContext: ForecastContext = {
+    selectedDate: selectedForecastDate,
+    todayDate,
+    timezone:
+      primaryWeatherData?.timezone ??
+      primaryWeatherSource?.timezone ??
+      "UTC",
+  };
+
   const astronomyStates = useAstronomySources(
     dashboard.sources,
+    selectedForecastDate,
   );
   const radarStates = useRadarSources(
     dashboard.sources,
@@ -93,6 +143,35 @@ export function DashboardBuilder() {
     setDashboard((current) => ({
       ...current,
       name,
+    }));
+  }
+
+  function updateDashboardTheme(
+    theme: DashboardThemeKey,
+  ) {
+    setDashboard((current) => ({
+      ...current,
+      theme,
+    }));
+  }
+
+  function updateWidgetSettings(
+    widgetId: string,
+    settings: Record<string, unknown>,
+  ) {
+    setDashboard((current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) =>
+        widget.id === widgetId
+          ? {
+              ...widget,
+              settings: {
+                ...widget.settings,
+                ...settings,
+              },
+            }
+          : widget,
+      ),
     }));
   }
 
@@ -384,6 +463,7 @@ export function DashboardBuilder() {
   function updateWeatherLocation(
     location: WeatherLocationSelection,
   ) {
+    setSelectedForecastDateOverride(undefined);
     setDashboard((current) => ({
       ...current,
       sources: current.sources.map((source) =>
@@ -424,7 +504,32 @@ export function DashboardBuilder() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <label className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm">
+            <span className="text-[var(--muted)]">
+              Forecast date
+            </span>
+            <select
+              aria-label="Forecast date"
+              value={selectedForecastDate}
+              onChange={(event) =>
+                setSelectedForecastDateOverride(
+                  event.target.value,
+                )
+              }
+              className="bg-transparent font-medium"
+            >
+              {availableForecastDates.map((date) => (
+                <option key={date} value={date}>
+                  {formatForecastDateLabel({
+                    date,
+                    todayDate,
+                  })}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {dashboard.layouts.map((layout) => (
             <button
               key={layout.id}
@@ -461,6 +566,7 @@ export function DashboardBuilder() {
           onPanelChange={setPanel}
           layouts={dashboard.layouts}
           activeLayout={activeLayout}
+          theme={dashboard.theme}
           widgets={dashboard.widgets}
           sources={dashboard.sources}
           weatherStates={weatherStates}
@@ -480,6 +586,7 @@ export function DashboardBuilder() {
           onApplyLayoutPreset={applyLayoutPreset}
           onUpdateLayout={updateLayout}
           onResetLayout={resetLayout}
+          onThemeChange={updateDashboardTheme}
           onAddWidget={addWidget}
           onWeatherLocationChange={
             updateWeatherLocation
@@ -498,6 +605,7 @@ export function DashboardBuilder() {
 
         <BuilderPreview
           layout={activeLayout}
+          theme={dashboard.theme}
           widgets={dashboard.widgets}
           sources={dashboard.sources}
           weatherStates={weatherStates}
@@ -505,6 +613,13 @@ export function DashboardBuilder() {
           marineStates={marineStates}
           astronomyStates={astronomyStates}
           radarStates={radarStates}
+          forecastContext={forecastContext}
+          onForecastDateChange={
+            setSelectedForecastDateOverride
+          }
+          onWidgetSettingsChange={
+            updateWidgetSettings
+          }
           mode={mode}
           zoom={zoom}
           showGrid={showGrid}
@@ -533,4 +648,25 @@ function createId(): string {
   return Math.random()
     .toString(16)
     .slice(2, 10);
+}
+
+function dateKeyInTimezone(
+  date: Date,
+  timezone: string,
+): string {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const values = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
 }

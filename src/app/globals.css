@@ -76,3 +76,247 @@ button:disabled {
 .widget-drag-handle:active {
   cursor: grabbing;
 }
+
+/* Dashboard themes are scoped to the preview canvas so the editor stays neutral. */
+.dashboard-theme {
+  --dashboard-background: #f7fafb;
+  --dashboard-pattern: none;
+  --dashboard-pattern-size: auto;
+  --widget-radius: 16px;
+  --widget-shadow: none;
+
+  color: var(--foreground);
+}
+
+.dashboard-theme[data-theme="light"] {
+  --background: #f4f7f8;
+  --dashboard-background: #f7fafb;
+  --foreground: #122126;
+  --surface: #ffffff;
+  --surface-muted: #edf3f4;
+  --border: #d6e1e3;
+  --muted: #61747a;
+  --accent: #087f8c;
+  --accent-strong: #05646e;
+  --selection: rgba(8, 127, 140, 0.16);
+}
+
+.dashboard-theme[data-theme="dark"] {
+  --background: #091216;
+  --dashboard-background: #091216;
+  --foreground: #edf8fa;
+  --surface: #142229;
+  --surface-muted: #1d2d34;
+  --border: #30454e;
+  --muted: #a1b4bb;
+  --accent: #54d6e4;
+  --accent-strong: #7ce8f2;
+  --selection: rgba(84, 214, 228, 0.18);
+  --widget-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+.dashboard-theme[data-theme="neon"] {
+  --background: #050709;
+  --dashboard-background: #050709;
+  --foreground: #f5ffe9;
+  --surface: #101417;
+  --surface-muted: #182023;
+  --border: #34413f;
+  --muted: #a7b8b2;
+  --accent: #9cff00;
+  --accent-strong: #c1ff5f;
+  --selection: rgba(156, 255, 0, 0.17);
+  --dashboard-pattern: radial-gradient(
+    circle at 1px 1px,
+    rgba(72, 255, 232, 0.16) 1px,
+    transparent 1.5px
+  );
+  --dashboard-pattern-size: 24px 24px;
+  --widget-radius: 10px;
+  --widget-shadow:
+    0 0 0 1px rgba(156, 255, 0, 0.14),
+    0 0 20px rgba(72, 255, 232, 0.08);
+}
+
+.dashboard-theme[data-theme="future"] {
+  --background: #080b1c;
+  --dashboard-background: #080b1c;
+  --foreground: #f3f2ff;
+  --surface: #151a35;
+  --surface-muted: #20284a;
+  --border: #39436d;
+  --muted: #aab0d1;
+  --accent: #8b7cff;
+  --accent-strong: #b1a7ff;
+  --selection: rgba(139, 124, 255, 0.22);
+  --dashboard-pattern:
+    radial-gradient(circle at 12% 18%, rgba(67, 216, 255, 0.18), transparent 25%),
+    radial-gradient(circle at 88% 12%, rgba(190, 80, 255, 0.18), transparent 28%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.025) 25%, transparent 25%);
+  --dashboard-pattern-size: auto, auto, 36px 36px;
+  --widget-radius: 20px;
+  --widget-shadow: 0 16px 38px rgba(0, 0, 0, 0.3);
+}
+
+.dashboard-theme[data-theme="beach"] {
+  --background: #f7efd9;
+  --dashboard-background: #f7efd9;
+  --foreground: #173d42;
+  --surface: #fffaf0;
+  --surface-muted: #e8f2ed;
+  --border: #c9ddd6;
+  --muted: #5e7775;
+  --accent: #008b8b;
+  --accent-strong: #006c70;
+  --selection: rgba(0, 139, 139, 0.15);
+  --dashboard-pattern:
+    radial-gradient(circle at 12% 10%, rgba(255, 127, 80, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(55, 190, 190, 0.09), transparent 46%);
+  --dashboard-pattern-size: auto;
+  --widget-radius: 22px;
+  --widget-shadow: 0 8px 22px rgba(52, 103, 101, 0.1);
+}
+
+.dashboard-theme[data-theme="sunset"] {
+  --background: #241329;
+  --dashboard-background: #241329;
+  --foreground: #fff5ec;
+  --surface: #3a2040;
+  --surface-muted: #4a2b50;
+  --border: #68446d;
+  --muted: #d1b5d1;
+  --accent: #ff9f43;
+  --accent-strong: #ffc167;
+  --selection: rgba(255, 159, 67, 0.2);
+  --dashboard-pattern:
+    radial-gradient(circle at 50% 0%, rgba(255, 94, 98, 0.25), transparent 42%),
+    linear-gradient(180deg, rgba(255, 159, 67, 0.08), transparent 55%);
+  --dashboard-pattern-size: auto;
+  --widget-radius: 18px;
+  --widget-shadow: 0 14px 32px rgba(10, 3, 14, 0.28);
+}
+
+.dashboard-theme .widget-card {
+  border-radius: var(--widget-radius);
+  box-shadow: var(--widget-shadow);
+}
+
+/* Replace common hard-coded white surfaces inside the themed canvas. */
+.dashboard-theme .bg-white {
+  background-color: var(--surface) !important;
+}
+
+.dashboard-theme select,
+.dashboard-theme input,
+.dashboard-theme textarea {
+  color: var(--foreground);
+}
+
+.dashboard-theme option {
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+/* Three per-widget typography scales. */
+.widget-font-small .text-xs {
+  font-size: 0.65rem !important;
+  line-height: 0.9rem !important;
+}
+
+.widget-font-small .text-sm {
+  font-size: 0.76rem !important;
+  line-height: 1rem !important;
+}
+
+.widget-font-small .text-base {
+  font-size: 0.88rem !important;
+  line-height: 1.2rem !important;
+}
+
+.widget-font-small .text-xl {
+  font-size: 1.05rem !important;
+  line-height: 1.3rem !important;
+}
+
+.widget-font-small .text-2xl {
+  font-size: 1.25rem !important;
+  line-height: 1.5rem !important;
+}
+
+.widget-font-small .text-3xl {
+  font-size: 1.55rem !important;
+  line-height: 1.8rem !important;
+}
+
+.widget-font-large .text-xs {
+  font-size: 0.82rem !important;
+  line-height: 1.1rem !important;
+}
+
+.widget-font-large .text-sm {
+  font-size: 0.98rem !important;
+  line-height: 1.35rem !important;
+}
+
+.widget-font-large .text-base {
+  font-size: 1.12rem !important;
+  line-height: 1.5rem !important;
+}
+
+.widget-font-large .text-xl {
+  font-size: 1.45rem !important;
+  line-height: 1.7rem !important;
+}
+
+.widget-font-large .text-2xl {
+  font-size: 1.75rem !important;
+  line-height: 2rem !important;
+}
+
+.widget-font-large .text-3xl {
+  font-size: 2.2rem !important;
+  line-height: 2.4rem !important;
+}
+
+/* Compact density trims common widget spacing without changing the grid. */
+.widget-density-compact .p-4 {
+  padding: 0.7rem !important;
+}
+
+.widget-density-compact .p-3 {
+  padding: 0.5rem !important;
+}
+
+.widget-density-compact .gap-4 {
+  gap: 0.7rem !important;
+}
+
+.widget-density-compact .gap-3 {
+  gap: 0.5rem !important;
+}
+
+.widget-density-compact .mt-3 {
+  margin-top: 0.5rem !important;
+}
+
+
+/* Compact widgets stay inside their assigned grid rectangle. */
+.widget-density-compact,
+.widget-density-compact .widget-card-content,
+.widget-density-compact .widget-card-content > * {
+  min-height: 0;
+  max-height: 100%;
+}
+
+.widget-density-compact .widget-card-content {
+  overflow: hidden;
+}
+
+.widget-density-compact dl > div {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+.widget-density-compact .mt-2 {
+  margin-top: 0.25rem !important;
+}

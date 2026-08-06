@@ -6,6 +6,7 @@ import type {
   WidgetInstance,
   WidgetKey,
 } from "@/types/dashboard";
+import type { ForecastContext } from "@/types/forecast";
 import type {
   AstronomySourceState,
   MarineSourceState,
@@ -45,4 +46,9 @@ export type WidgetComponentProps = {
   marineState?: MarineSourceState;
   astronomyState?: AstronomySourceState;
   radarState?: RadarSourceState;
+  forecastContext: ForecastContext;
+  onForecastDateChange?: (date: string) => void;
+  onWidgetSettingsChange?: (
+    settings: Record<string, unknown>,
+  ) => void;
 };

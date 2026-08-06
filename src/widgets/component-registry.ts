@@ -4,6 +4,7 @@ import type { WidgetComponentProps } from "@/widgets/types";
 import {
   CurrentConditionsWidget,
   CurrentTemperatureWidget,
+  ForecastOverviewWidget,
   DailyForecastWidget,
   HourlyForecastWidget,
   RainChanceWidget,
@@ -39,6 +40,7 @@ export const widgetComponents: Record<
   WidgetKey,
   ComponentType<WidgetComponentProps>
 > = {
+  "forecast-overview": ForecastOverviewWidget,
   "current-temperature":
     CurrentTemperatureWidget,
   "current-conditions":

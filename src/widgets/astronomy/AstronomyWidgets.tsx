@@ -5,7 +5,10 @@ import {
 } from "@/widgets/shared/WidgetPrimitives";
 import { LiveDataView } from "@/widgets/shared/LiveDataView";
 import { MoonPhaseGraphic } from "@/widgets/shared/ForecastVisuals";
-import { booleanSetting } from "@/lib/widget-settings";
+import {
+  booleanSetting,
+  stringSetting,
+} from "@/lib/widget-settings";
 
 export function MoonPhaseWidget({
   widget,
@@ -26,6 +29,12 @@ export function MoonPhaseWidget({
     "showIllumination",
     true,
   );
+  const compact =
+    stringSetting(
+      widget.settings,
+      "density",
+      "standard",
+    ) === "compact";
 
   return (
     <LiveDataView
@@ -34,7 +43,7 @@ export function MoonPhaseWidget({
       loadingDetail="Calculating the Moon phase for this location."
     >
       {(data) => {
-        if (!showMoonGraphic) {
+        if (!showMoonGraphic || compact) {
           return (
             <MetricValue
               value={

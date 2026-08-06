@@ -49,7 +49,10 @@ export function HourlyTemperatureLineChart({
   showRainChance: boolean;
 }) {
   const gradientId = useId().replaceAll(":", "");
-  const width = 900;
+  const width = Math.max(
+    900,
+    points.length * 105,
+  );
   const height = 280;
   const left = 54;
   const right = 42;
@@ -111,10 +114,11 @@ export function HourlyTemperatureLineChart({
   } ${top + chartHeight} Z`;
 
   return (
-    <div className="flex h-full min-h-0 w-full items-center justify-center overflow-hidden">
+    <div className="flex h-full min-h-0 w-full items-center overflow-x-auto pb-1">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="block h-auto max-h-full w-full max-w-[1080px]"
+        className="block h-auto max-h-full w-full"
+        style={{ minWidth: width }}
         role="img"
         aria-label={`Hourly temperature line chart from ${Math.round(
           minimum,
@@ -174,7 +178,7 @@ export function HourlyTemperatureLineChart({
               cx={point.x}
               cy={point.y}
               r="5"
-              fill="white"
+              fill="var(--surface)"
               stroke="var(--accent)"
               strokeWidth="3"
               vectorEffect="non-scaling-stroke"
@@ -192,7 +196,7 @@ export function HourlyTemperatureLineChart({
                 fontWeight="600"
                 fill="var(--foreground)"
                 paintOrder="stroke"
-                stroke="white"
+                stroke="var(--surface)"
                 strokeWidth="4"
               >
                 {Math.round(

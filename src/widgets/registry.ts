@@ -40,7 +40,7 @@ const timelineDesktop: DefaultPlacement = {
   w: 12,
   h: 3,
   minW: 6,
-  minH: 3,
+  minH: 2,
 };
 
 const timelineMobile: DefaultPlacement = {
@@ -58,6 +58,34 @@ function placements(
 }
 
 export const widgetDefinitions: WidgetDefinition[] = [
+  {
+    key: "forecast-overview",
+    name: "Forecast Overview",
+    description:
+      "Adaptive selected-day summary with conditions, rain, wind, and temperature details.",
+    category: "weather",
+    sourceKind: "weather-location",
+    defaultTitle: "Forecast Overview",
+    defaultSettings: {
+      unit: "fahrenheit",
+      showSourceLabel: true,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(
+      {
+        w: 12,
+        h: 3,
+        minW: 8,
+        minH: 2,
+      },
+      {
+        w: 4,
+        h: 5,
+        minW: 4,
+        minH: 4,
+      },
+    ),
+  },
   {
     key: "current-temperature",
     name: "Current Temperature",
@@ -110,7 +138,7 @@ export const widgetDefinitions: WidgetDefinition[] = [
     defaultTitle: "Hourly Forecast",
     defaultSettings: {
       displayMode: "cards",
-      hours: 5,
+      hours: 8,
       unit: "fahrenheit",
       showPointLabels: true,
       showRainChance: false,
@@ -127,7 +155,7 @@ export const widgetDefinitions: WidgetDefinition[] = [
     sourceKind: "weather-location",
     defaultTitle: "Daily Forecast",
     defaultSettings: {
-      days: 5,
+      days: 7,
       showSourceLabel: true,
       showLastUpdated: false,
     },
@@ -218,7 +246,7 @@ export const widgetDefinitions: WidgetDefinition[] = [
     defaultTitle: "Wind Forecast",
     defaultSettings: {
       unit: "mph",
-      hours: 5,
+      hours: 8,
       showSourceLabel: true,
       showLastUpdated: false,
     },

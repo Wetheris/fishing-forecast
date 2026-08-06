@@ -2,25 +2,30 @@
 
 import type {
   DashboardLayout,
+  DashboardThemeKey,
   LayoutDevice,
 } from "@/types/dashboard";
 import {
   aspectRatioLabel,
   layoutPresets,
 } from "@/lib/dashboard-layouts";
+import { dashboardThemes } from "@/lib/dashboard-themes";
 
 export function LayoutPanel({
   layouts,
   activeLayout,
+  theme,
   onSelectLayout,
   onCreateLayout,
   onDeleteLayout,
   onApplyPreset,
   onUpdateLayout,
   onResetLayout,
+  onThemeChange,
 }: {
   layouts: DashboardLayout[];
   activeLayout: DashboardLayout;
+  theme: DashboardThemeKey;
   onSelectLayout: (layoutId: string) => void;
   onCreateLayout: (device: LayoutDevice) => void;
   onDeleteLayout: (layoutId: string) => void;
@@ -29,6 +34,7 @@ export function LayoutPanel({
     updates: Partial<DashboardLayout>,
   ) => void;
   onResetLayout: () => void;
+  onThemeChange: (theme: DashboardThemeKey) => void;
 }) {
   const hasMobile = layouts.some(
     (layout) => layout.device === "mobile",
@@ -84,6 +90,50 @@ export function LayoutPanel({
 
       <hr className="my-5 border-[var(--border)]" />
 
+      <section>
+        <h3 className="text-sm font-medium">
+          Dashboard theme
+        </h3>
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Theme colors apply to every dashboard layout.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {dashboardThemes.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={theme === option.key}
+              onClick={() => onThemeChange(option.key)}
+              className={[
+                "rounded-xl border p-2 text-left",
+                theme === option.key
+                  ? "border-[var(--accent)] bg-[var(--selection)]"
+                  : "border-[var(--border)] hover:bg-[var(--surface-muted)]",
+              ].join(" ")}
+            >
+              <span className="flex gap-1">
+                {option.swatches.map((swatch) => (
+                  <span
+                    key={swatch}
+                    className="h-5 flex-1 rounded-md border border-black/10"
+                    style={{ backgroundColor: swatch }}
+                  />
+                ))}
+              </span>
+              <span className="mt-2 block text-sm font-medium">
+                {option.name}
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-[var(--muted)]">
+                {option.description}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <hr className="my-5 border-[var(--border)]" />
+
       <div className="space-y-4">
         <div>
           <label
@@ -136,7 +186,7 @@ export function LayoutPanel({
             }
           />
           <NumberField
-            label="Height"
+            label="Minimum height"
             value={activeLayout.viewport.height}
             min={480}
             max={1800}
@@ -153,6 +203,8 @@ export function LayoutPanel({
         </div>
 
         <p className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm">
+          Widgets may extend below the minimum height; the dashboard will scroll vertically.
+          <br />
           Aspect ratio:{" "}
           <strong>
             {aspectRatioLabel(

@@ -158,7 +158,7 @@ function normalizeMarineResponse(
       ),
     },
     current,
-    hourly: hourly.slice(0, 72),
+    hourly,
   };
 }
 

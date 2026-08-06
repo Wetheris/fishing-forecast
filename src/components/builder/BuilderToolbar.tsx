@@ -3,6 +3,7 @@
 import type {
   DashboardLayout,
   DashboardSource,
+  DashboardThemeKey,
   LayoutDevice,
   WidgetInstance,
   WidgetPlacement,
@@ -41,6 +42,7 @@ export function BuilderToolbar({
   onPanelChange,
   layouts,
   activeLayout,
+  theme,
   widgets,
   sources,
   weatherStates,
@@ -56,6 +58,7 @@ export function BuilderToolbar({
   onApplyLayoutPreset,
   onUpdateLayout,
   onResetLayout,
+  onThemeChange,
   onAddWidget,
   onWeatherLocationChange,
   onAddTideSource,
@@ -71,6 +74,7 @@ export function BuilderToolbar({
   ) => void;
   layouts: DashboardLayout[];
   activeLayout: DashboardLayout;
+  theme: DashboardThemeKey;
   widgets: WidgetInstance[];
   sources: DashboardSource[];
   weatherStates: WeatherSourceStateMap;
@@ -96,6 +100,7 @@ export function BuilderToolbar({
     updates: Partial<DashboardLayout>,
   ) => void;
   onResetLayout: () => void;
+  onThemeChange: (theme: DashboardThemeKey) => void;
   onAddWidget: (
     definition: WidgetDefinition,
   ) => void;
@@ -159,6 +164,7 @@ export function BuilderToolbar({
           <LayoutPanel
             layouts={layouts}
             activeLayout={activeLayout}
+            theme={theme}
             onSelectLayout={onSelectLayout}
             onCreateLayout={onCreateLayout}
             onDeleteLayout={onDeleteLayout}
@@ -167,6 +173,7 @@ export function BuilderToolbar({
             }
             onUpdateLayout={onUpdateLayout}
             onResetLayout={onResetLayout}
+            onThemeChange={onThemeChange}
           />
         ) : null}
 

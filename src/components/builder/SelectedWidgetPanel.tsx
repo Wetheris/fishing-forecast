@@ -1,7 +1,9 @@
 import type {
   DashboardLayout,
   DashboardSource,
+  LayoutDevice,
   WidgetInstance,
+  WidgetKey,
   WidgetPlacement,
 } from "@/types/dashboard";
 import { getWidgetDefinition } from "@/widgets/registry";
@@ -117,7 +119,10 @@ export function SelectedWidgetPanel({
 
         <CommonDisplaySettings
           widget={widget}
+          placement={placement}
+          device={activeLayout.device}
           onChange={updateSetting}
+          onUpdatePlacement={onUpdatePlacement}
         />
 
         <WidgetSpecificSettings
@@ -195,28 +200,119 @@ export function SelectedWidgetPanel({
 
 function CommonDisplaySettings({
   widget,
+  placement,
+  device,
   onChange,
+  onUpdatePlacement,
 }: {
   widget: WidgetInstance;
+  placement: WidgetPlacement;
+  device: LayoutDevice;
   onChange: (key: string, value: unknown) => void;
+  onUpdatePlacement: (
+    updates: Partial<WidgetPlacement>,
+  ) => void;
 }) {
+  const showHeader = booleanSetting(
+    widget.settings,
+    "showHeader",
+    true,
+  );
+  const density = stringSetting(
+    widget.settings,
+    "density",
+    "standard",
+  );
+  const definition = getWidgetDefinition(
+    widget.widgetKey,
+  );
+  const standardPlacement =
+    definition.defaultPlacement[device];
+  const compactPlacement =
+    getCompactPlacement(
+      widget.widgetKey,
+      device,
+      standardPlacement,
+    );
+
   return (
-    <fieldset className="space-y-2">
+    <fieldset className="space-y-3">
       <legend className="text-sm font-medium">
         Display
       </legend>
 
-      <Checkbox
-        label="Show source label"
-        checked={booleanSetting(
+      <SelectSetting
+        label="Content density"
+        value={density}
+        options={[
+          ["standard", "Standard"],
+          ["compact", "Compact"],
+        ]}
+        onChange={(value) => {
+          onChange("density", value);
+
+          if (value === "compact") {
+            onUpdatePlacement({
+              h: compactPlacement.h,
+              minH: compactPlacement.minH,
+            });
+            return;
+          }
+
+          onUpdatePlacement({
+            h: Math.max(
+              placement.h,
+              standardPlacement.h,
+            ),
+            minH: standardPlacement.minH,
+          });
+        }}
+      />
+
+      <p className="text-xs leading-5 text-[var(--muted)]">
+        Compact mode removes secondary visuals and uses
+        a shorter fixed widget height. Change it here
+        rather than from inside the dashboard.
+      </p>
+
+      <SelectSetting
+        label="Font size"
+        value={stringSetting(
           widget.settings,
-          "showSourceLabel",
-          true,
+          "fontSize",
+          "medium",
         )}
+        options={[
+          ["small", "Small"],
+          ["medium", "Medium"],
+          ["large", "Large"],
+        ]}
         onChange={(value) =>
-          onChange("showSourceLabel", value)
+          onChange("fontSize", value)
         }
       />
+
+      <Checkbox
+        label="Show widget header"
+        checked={showHeader}
+        onChange={(value) =>
+          onChange("showHeader", value)
+        }
+      />
+
+      {showHeader ? (
+        <Checkbox
+          label="Show source label"
+          checked={booleanSetting(
+            widget.settings,
+            "showSourceLabel",
+            true,
+          )}
+          onChange={(value) =>
+            onChange("showSourceLabel", value)
+          }
+        />
+      ) : null}
 
       {widget.category === "weather" ||
       widget.category === "wind" ? (
@@ -236,6 +332,60 @@ function CommonDisplaySettings({
   );
 }
 
+function getCompactPlacement(
+  widgetKey: WidgetKey,
+  device: LayoutDevice,
+  standard: {
+    h: number;
+    minH: number;
+  },
+): {
+  h: number;
+  minH: number;
+} {
+  const mobile = device === "mobile";
+
+  switch (widgetKey) {
+    case "daily-forecast":
+      return {
+        h: 2,
+        minH: 2,
+      };
+
+    case "forecast-overview":
+      return {
+        h: mobile ? 3 : 2,
+        minH: mobile ? 3 : 2,
+      };
+
+    case "hourly-forecast":
+    case "wind-forecast":
+    case "tide-timeline":
+      return {
+        h: mobile ? 3 : 2,
+        minH: mobile ? 3 : 2,
+      };
+
+    case "moon-phase":
+      return {
+        h: mobile ? 2 : 2,
+        minH: mobile ? 2 : 2,
+      };
+
+    case "radar-map":
+      return {
+        h: mobile ? 4 : 3,
+        minH: mobile ? 4 : 3,
+      };
+
+    default:
+      return {
+        h: Math.max(1, standard.minH),
+        minH: Math.max(1, standard.minH),
+      };
+  }
+}
+
 function WidgetSpecificSettings({
   widget,
   onChange,
@@ -243,6 +393,29 @@ function WidgetSpecificSettings({
   widget: WidgetInstance;
   onChange: (key: string, value: unknown) => void;
 }) {
+  if (widget.widgetKey === "forecast-overview") {
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">
+          Forecast overview
+        </legend>
+        <SelectSetting
+          label="Temperature unit"
+          value={stringSetting(
+            widget.settings,
+            "unit",
+            "fahrenheit",
+          )}
+          options={[
+            ["fahrenheit", "Fahrenheit"],
+            ["celsius", "Celsius"],
+          ]}
+          onChange={(value) => onChange("unit", value)}
+        />
+      </fieldset>
+    );
+  }
+
   if (widget.widgetKey === "current-temperature") {
     return (
       <fieldset className="space-y-3">
@@ -349,13 +522,13 @@ function WidgetSpecificSettings({
         />
 
         <NumberSetting
-          label="Hours"
+          label="Default forecast points"
           value={numberSetting(
             widget.settings,
             "hours",
-            5,
+            8,
           )}
-          min={3}
+          min={4}
           max={12}
           onChange={(value) => onChange("hours", value)}
         />
@@ -386,6 +559,27 @@ function WidgetSpecificSettings({
             />
           </>
         ) : null}
+      </fieldset>
+    );
+  }
+
+  if (widget.widgetKey === "daily-forecast") {
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">
+          Multi-day forecast
+        </legend>
+        <NumberSetting
+          label="Days"
+          value={numberSetting(
+            widget.settings,
+            "days",
+            7,
+          )}
+          min={3}
+          max={7}
+          onChange={(value) => onChange("days", value)}
+        />
       </fieldset>
     );
   }
@@ -616,6 +810,19 @@ function WidgetSpecificSettings({
           ]}
           onChange={(value) => onChange("unit", value)}
         />
+        {widget.widgetKey === "wind-forecast" ? (
+          <NumberSetting
+            label="Forecast points"
+            value={numberSetting(
+              widget.settings,
+              "hours",
+              8,
+            )}
+            min={4}
+            max={12}
+            onChange={(value) => onChange("hours", value)}
+          />
+        ) : null}
       </fieldset>
     );
   }

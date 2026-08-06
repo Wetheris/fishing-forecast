@@ -12,6 +12,7 @@ import {
 import type {
   DashboardLayout,
   DashboardSource,
+  DashboardThemeKey,
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
@@ -21,12 +22,15 @@ import type {
   RadarSourceStateMap,
   TideSourceStateMap,
 } from "@/types/source-data";
+import type { ForecastContext } from "@/types/forecast";
 import type { WeatherSourceStateMap } from "@/types/weather";
+import { getLayoutContentHeight } from "@/lib/layout-measurements";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 import { WidgetShell } from "@/components/dashboard/WidgetShell";
 
 export function DashboardCanvas({
   layout,
+  theme,
   widgets,
   sources,
   weatherStates,
@@ -34,6 +38,9 @@ export function DashboardCanvas({
   marineStates,
   astronomyStates,
   radarStates,
+  forecastContext,
+  onForecastDateChange,
+  onWidgetSettingsChange,
   mode,
   scale,
   showGrid,
@@ -42,6 +49,7 @@ export function DashboardCanvas({
   onPlacementsChange,
 }: {
   layout: DashboardLayout;
+  theme: DashboardThemeKey;
   widgets: WidgetInstance[];
   sources: DashboardSource[];
   weatherStates: WeatherSourceStateMap;
@@ -49,6 +57,12 @@ export function DashboardCanvas({
   marineStates: MarineSourceStateMap;
   astronomyStates: AstronomySourceStateMap;
   radarStates: RadarSourceStateMap;
+  forecastContext: ForecastContext;
+  onForecastDateChange?: (date: string) => void;
+  onWidgetSettingsChange?: (
+    widgetId: string,
+    settings: Record<string, unknown>,
+  ) => void;
   mode: "edit" | "view";
   scale: number;
   showGrid: boolean;
@@ -82,16 +96,7 @@ export function DashboardCanvas({
     [visiblePlacements],
   );
 
-  const maxRows = Math.max(
-    1,
-    Math.floor(
-      (layout.viewport.height -
-        layout.grid.padding * 2 +
-        layout.grid.gap) /
-        (layout.grid.rowHeight + layout.grid.gap),
-    ),
-  );
-
+  const contentHeight = getLayoutContentHeight(layout);
   const cellWidth =
     (layout.viewport.width -
       layout.grid.padding * 2 -
@@ -102,13 +107,19 @@ export function DashboardCanvas({
   const backgroundStyle = showGrid
     ? {
         backgroundImage:
-          "linear-gradient(to right, rgba(8,127,140,.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(8,127,140,.10) 1px, transparent 1px)",
+          "linear-gradient(to right, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px), var(--dashboard-pattern, none)",
         backgroundSize: `${cellWidth + layout.grid.gap}px ${
           layout.grid.rowHeight + layout.grid.gap
-        }px`,
-        backgroundPosition: `${layout.grid.padding}px ${layout.grid.padding}px`,
+        }px, ${cellWidth + layout.grid.gap}px ${
+          layout.grid.rowHeight + layout.grid.gap
+        }px, var(--dashboard-pattern-size, auto)`,
+        backgroundPosition: `${layout.grid.padding}px ${layout.grid.padding}px, ${layout.grid.padding}px ${layout.grid.padding}px, center`,
       }
-    : undefined;
+    : {
+        backgroundImage: "var(--dashboard-pattern, none)",
+        backgroundSize: "var(--dashboard-pattern-size, auto)",
+        backgroundPosition: "center",
+      };
 
   function handleLayoutChange(
     nextLayout: Layout,
@@ -146,10 +157,13 @@ export function DashboardCanvas({
 
   return (
     <div
-      className="relative overflow-hidden bg-[#f7fafb]"
+      className="dashboard-theme relative text-[var(--foreground)]"
+      data-theme={theme}
       style={{
         width: layout.viewport.width,
-        height: layout.viewport.height,
+        height: contentHeight,
+        backgroundColor:
+          "var(--dashboard-background, var(--background))",
         ...backgroundStyle,
       }}
       onMouseDown={(event) => {
@@ -166,7 +180,7 @@ export function DashboardCanvas({
         layout={gridLayout}
         autoSize={false}
         style={{
-          height: layout.viewport.height,
+          height: contentHeight,
         }}
         gridConfig={{
           cols: layout.grid.columns,
@@ -179,11 +193,10 @@ export function DashboardCanvas({
             layout.grid.padding,
             layout.grid.padding,
           ],
-          maxRows,
         }}
         dragConfig={{
           enabled: mode === "edit",
-          bounded: true,
+          bounded: false,
           handle: ".widget-drag-handle",
           cancel:
             "button:not(.widget-drag-handle),input,select,textarea,a",
@@ -263,6 +276,19 @@ export function DashboardCanvas({
                   marineState={marineState}
                   astronomyState={astronomyState}
                   radarState={radarState}
+                  forecastContext={forecastContext}
+                  onForecastDateChange={
+                    onForecastDateChange
+                  }
+                  onWidgetSettingsChange={
+                    onWidgetSettingsChange
+                      ? (settings) =>
+                          onWidgetSettingsChange(
+                            widget.id,
+                            settings,
+                          )
+                      : undefined
+                  }
                 />
               </WidgetShell>
             </div>

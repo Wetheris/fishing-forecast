@@ -94,10 +94,9 @@ export const layoutPresets: LayoutPreset[] = [
 
 export function createInitialDashboard(): FishingDashboard {
   const initialKeys = [
-    "current-temperature",
-    "wind-speed",
-    "next-high-tide",
+    "forecast-overview",
     "hourly-forecast",
+    "daily-forecast",
   ] as const;
 
   const widgets = initialKeys.map((key, index) =>
@@ -107,6 +106,7 @@ export function createInitialDashboard(): FishingDashboard {
   return {
     id: "draft-dashboard",
     name: "Cape May Fishing",
+    theme: "light",
     sources: mockSources,
     widgets,
     layouts: [
@@ -139,7 +139,12 @@ export function createWidgetInstance(
     category: definition.category,
     sourceId: source.id,
     title: definition.defaultTitle,
-    settings: { ...definition.defaultSettings },
+    settings: {
+      showHeader: true,
+      density: "standard",
+      fontSize: "medium",
+      ...definition.defaultSettings,
+    },
   };
 }
 

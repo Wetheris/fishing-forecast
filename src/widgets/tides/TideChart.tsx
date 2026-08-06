@@ -12,20 +12,22 @@ export function TideChart({
   currentLocalTime,
   showCurrentMarker,
   showHighLowLabels,
+  compact = false,
 }: {
   events: TideEvent[];
   timeline: TideTimelinePoint[];
   currentLocalTime: string;
   showCurrentMarker: boolean;
   showHighLowLabels: boolean;
+  compact?: boolean;
 }) {
   const gradientId = useId().replaceAll(":", "");
   const width = 960;
-  const height = 280;
-  const left = 62;
-  const right = 54;
-  const top = 38;
-  const bottom = 64;
+  const height = compact ? 210 : 280;
+  const left = compact ? 48 : 62;
+  const right = compact ? 40 : 54;
+  const top = compact ? 24 : 38;
+  const bottom = compact ? 46 : 64;
   const chartWidth = width - left - right;
   const chartHeight = height - top - bottom;
 
@@ -176,7 +178,7 @@ export function TideChart({
               cx={point.x}
               cy={point.y}
               r="5"
-              fill="white"
+              fill="var(--surface)"
               stroke="var(--accent-strong)"
               strokeWidth="3"
               vectorEffect="non-scaling-stroke"
@@ -194,11 +196,11 @@ export function TideChart({
                       )
                 }
                 textAnchor="middle"
-                fontSize="14"
+                fontSize={compact ? 12 : 14}
                 fontWeight="600"
                 fill="var(--foreground)"
                 paintOrder="stroke"
-                stroke="white"
+                stroke="var(--surface)"
                 strokeWidth="4"
               >
                 {point.type === "high"
@@ -212,7 +214,7 @@ export function TideChart({
               x={point.x}
               y={baseY + 31}
               textAnchor="middle"
-              fontSize="14"
+              fontSize={compact ? 12 : 14}
               fill="var(--muted)"
             >
               {point.displayTime}
@@ -238,7 +240,7 @@ export function TideChart({
               cy={currentPoint.y}
               r="7"
               fill="var(--foreground)"
-              stroke="white"
+              stroke="var(--surface)"
               strokeWidth="3"
               vectorEffect="non-scaling-stroke"
             />
@@ -246,7 +248,7 @@ export function TideChart({
               x={currentPoint.x}
               y={top - 10}
               textAnchor="middle"
-              fontSize="14"
+              fontSize={compact ? 12 : 14}
               fontWeight="600"
               fill="var(--foreground)"
             >

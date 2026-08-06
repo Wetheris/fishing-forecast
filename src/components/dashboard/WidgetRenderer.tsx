@@ -3,6 +3,7 @@ import type {
   DashboardSource,
   WidgetInstance,
 } from "@/types/dashboard";
+import type { ForecastContext } from "@/types/forecast";
 import type {
   AstronomySourceState,
   MarineSourceState,
@@ -21,6 +22,9 @@ export function WidgetRenderer({
   marineState,
   astronomyState,
   radarState,
+  forecastContext,
+  onForecastDateChange,
+  onWidgetSettingsChange,
 }: {
   widget: WidgetInstance;
   source: DashboardSource;
@@ -29,6 +33,11 @@ export function WidgetRenderer({
   marineState?: MarineSourceState;
   astronomyState?: AstronomySourceState;
   radarState?: RadarSourceState;
+  forecastContext: ForecastContext;
+  onForecastDateChange?: (date: string) => void;
+  onWidgetSettingsChange?: (
+    settings: Record<string, unknown>,
+  ) => void;
 }) {
   const Component =
     widgetComponents[widget.widgetKey];
@@ -42,6 +51,13 @@ export function WidgetRenderer({
       marineState={marineState}
       astronomyState={astronomyState}
       radarState={radarState}
+      forecastContext={forecastContext}
+      onForecastDateChange={
+        onForecastDateChange
+      }
+      onWidgetSettingsChange={
+        onWidgetSettingsChange
+      }
     />
   );
 }

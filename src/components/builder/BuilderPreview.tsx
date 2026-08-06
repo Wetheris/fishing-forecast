@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   DashboardLayout,
   DashboardSource,
+  DashboardThemeKey,
   WidgetInstance,
   WidgetPlacement,
 } from "@/types/dashboard";
@@ -13,7 +14,9 @@ import type {
   RadarSourceStateMap,
   TideSourceStateMap,
 } from "@/types/source-data";
+import type { ForecastContext } from "@/types/forecast";
 import type { WeatherSourceStateMap } from "@/types/weather";
+import { getLayoutContentHeight } from "@/lib/layout-measurements";
 import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
 
 export type PreviewZoom = "fit" | 0.5 | 0.75 | 1;
@@ -23,6 +26,7 @@ const SCALE_PRECISION = 1000;
 
 export function BuilderPreview({
   layout,
+  theme,
   widgets,
   sources,
   weatherStates,
@@ -30,6 +34,9 @@ export function BuilderPreview({
   marineStates,
   astronomyStates,
   radarStates,
+  forecastContext,
+  onForecastDateChange,
+  onWidgetSettingsChange,
   mode,
   zoom,
   showGrid,
@@ -41,6 +48,7 @@ export function BuilderPreview({
   onPlacementsChange,
 }: {
   layout: DashboardLayout;
+  theme: DashboardThemeKey;
   widgets: WidgetInstance[];
   sources: DashboardSource[];
   weatherStates: WeatherSourceStateMap;
@@ -48,6 +56,12 @@ export function BuilderPreview({
   marineStates: MarineSourceStateMap;
   astronomyStates: AstronomySourceStateMap;
   radarStates: RadarSourceStateMap;
+  forecastContext: ForecastContext;
+  onForecastDateChange: (date: string) => void;
+  onWidgetSettingsChange: (
+    widgetId: string,
+    settings: Record<string, unknown>,
+  ) => void;
   mode: "edit" | "view";
   zoom: PreviewZoom;
   showGrid: boolean;
@@ -61,10 +75,7 @@ export function BuilderPreview({
   ) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
-  const [stageSize, setStageSize] = useState({
-    width: 1000,
-    height: 700,
-  });
+  const [stageWidth, setStageWidth] = useState(1000);
 
   useEffect(() => {
     const element = stageRef.current;
@@ -77,21 +88,12 @@ export function BuilderPreview({
 
     const measure = () => {
       const nextWidth = element.clientWidth;
-      const nextHeight = element.clientHeight;
 
-      setStageSize((current) => {
-        if (
-          Math.abs(current.width - nextWidth) < 2 &&
-          Math.abs(current.height - nextHeight) < 2
-        ) {
-          return current;
-        }
-
-        return {
-          width: nextWidth,
-          height: nextHeight,
-        };
-      });
+      setStageWidth((current) =>
+        Math.abs(current - nextWidth) < 2
+          ? current
+          : nextWidth,
+      );
     };
 
     const observer = new ResizeObserver(() => {
@@ -108,25 +110,20 @@ export function BuilderPreview({
     };
   }, []);
 
+  const contentHeight = getLayoutContentHeight(layout);
   const availableWidth = Math.max(
     1,
-    stageSize.width - FIT_PADDING,
+    stageWidth - FIT_PADDING,
   );
-  const availableHeight = Math.max(
-    1,
-    stageSize.height - FIT_PADDING,
-  );
-
   const rawFitScale = Math.min(
     1,
     availableWidth / layout.viewport.width,
-    availableHeight / layout.viewport.height,
   );
 
   /*
-   * Flooring the fit scale prevents tiny sub-pixel measurement
-   * differences from repeatedly moving the canvas by a fraction of a
-   * pixel.
+   * Fit mode is width-based. A dashboard that grows vertically keeps a
+   * readable scale and scrolls instead of shrinking until everything is
+   * too small to use.
    */
   const fitScale =
     Math.floor(
@@ -138,8 +135,10 @@ export function BuilderPreview({
     layout.viewport.width * scale,
   );
   const displayedHeight = Math.round(
-    layout.viewport.height * scale,
+    contentHeight * scale,
   );
+  const hasScrollableContent =
+    contentHeight > layout.viewport.height;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -152,6 +151,9 @@ export function BuilderPreview({
             {layout.viewport.width} × {layout.viewport.height} ·{" "}
             {layout.grid.columns} columns ·{" "}
             {Math.round(scale * 100)}%
+            {hasScrollableContent
+              ? ` · ${contentHeight}px scroll height`
+              : ""}
           </p>
         </div>
 
@@ -185,7 +187,7 @@ export function BuilderPreview({
             }}
             className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm"
           >
-            <option value="fit">Fit</option>
+            <option value="fit">Fit width</option>
             <option value="0.5">50%</option>
             <option value="0.75">75%</option>
             <option value="1">100%</option>
@@ -206,12 +208,7 @@ export function BuilderPreview({
 
       <div
         ref={stageRef}
-        className={[
-          "builder-scrollbar relative min-h-[520px] flex-1 bg-[#e8eef0]",
-          zoom === "fit"
-            ? "overflow-hidden"
-            : "overflow-auto",
-        ].join(" ")}
+        className="builder-scrollbar relative min-h-[520px] flex-1 overflow-auto bg-[#e8eef0]"
         style={{
           scrollbarGutter: "stable both-edges",
           overflowAnchor: "none",
@@ -230,13 +227,14 @@ export function BuilderPreview({
               className="origin-top-left border border-slate-300 bg-white shadow-sm"
               style={{
                 width: layout.viewport.width,
-                height: layout.viewport.height,
+                height: contentHeight,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
               }}
             >
               <DashboardCanvas
                 layout={layout}
+                theme={theme}
                 widgets={widgets}
                 sources={sources}
                 weatherStates={weatherStates}
@@ -244,6 +242,13 @@ export function BuilderPreview({
                 marineStates={marineStates}
                 astronomyStates={astronomyStates}
                 radarStates={radarStates}
+                forecastContext={forecastContext}
+                onForecastDateChange={
+                  onForecastDateChange
+                }
+                onWidgetSettingsChange={
+                  onWidgetSettingsChange
+                }
                 mode={mode}
                 scale={scale}
                 showGrid={showGrid && mode === "edit"}

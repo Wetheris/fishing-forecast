@@ -98,6 +98,7 @@ export type AstronomyEvent = {
 export type AstronomySourceData = {
   provider: "astronomy-engine";
   calculatedAt: string;
+  date: string;
   timezone: string;
   phaseDegrees: number;
   phaseName: string;

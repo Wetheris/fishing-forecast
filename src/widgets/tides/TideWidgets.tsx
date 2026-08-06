@@ -3,6 +3,7 @@ import {
   CompactTimeline,
   DataList,
   MetricValue,
+  WidgetDataMessage,
 } from "@/widgets/shared/WidgetPrimitives";
 import { LiveDataView } from "@/widgets/shared/LiveDataView";
 import { TideChart } from "@/widgets/tides/TideChart";
@@ -14,33 +15,46 @@ import {
   feetToMeters,
   roundToTenth,
 } from "@/lib/units";
+import { formatForecastDateLabel } from "@/lib/forecast-selection";
+import type {
+  TideEvent,
+  TideSourceData,
+} from "@/types/source-data";
 
 export function NextHighTideWidget({
   widget,
   tideState,
+  forecastContext,
 }: WidgetComponentProps) {
   return (
     <LiveDataView
       state={tideState}
       sourceName="NOAA tides"
-      loadingDetail="Fetching the latest NOAA tide predictions."
+      loadingDetail="Fetching NOAA tide predictions."
     >
-      {(data) =>
-        data.nextHigh ? (
+      {(data) => {
+        const event = findSelectedEvent(
+          data,
+          forecastContext.selectedDate,
+          forecastContext.todayDate,
+          "high",
+        );
+
+        return event ? (
           <MetricValue
-            value={data.nextHigh.displayTime}
+            value={event.displayTime}
             detail={formatHeight(
-              data.nextHigh.heightFt,
+              event.heightFt,
               widget,
             )}
           />
         ) : (
           <MetricValue
             value="Unavailable"
-            detail="No upcoming high tide was returned."
+            detail="No high tide prediction for this date."
           />
-        )
-      }
+        );
+      }}
     </LiveDataView>
   );
 }
@@ -48,50 +62,94 @@ export function NextHighTideWidget({
 export function NextLowTideWidget({
   widget,
   tideState,
+  forecastContext,
 }: WidgetComponentProps) {
   return (
     <LiveDataView
       state={tideState}
       sourceName="NOAA tides"
-      loadingDetail="Fetching the latest NOAA tide predictions."
+      loadingDetail="Fetching NOAA tide predictions."
     >
-      {(data) =>
-        data.nextLow ? (
+      {(data) => {
+        const event = findSelectedEvent(
+          data,
+          forecastContext.selectedDate,
+          forecastContext.todayDate,
+          "low",
+        );
+
+        return event ? (
           <MetricValue
-            value={data.nextLow.displayTime}
+            value={event.displayTime}
             detail={formatHeight(
-              data.nextLow.heightFt,
+              event.heightFt,
               widget,
             )}
           />
         ) : (
           <MetricValue
             value="Unavailable"
-            detail="No upcoming low tide was returned."
+            detail="No low tide prediction for this date."
           />
-        )
-      }
+        );
+      }}
     </LiveDataView>
   );
 }
 
 export function TideStatusWidget({
   tideState,
+  forecastContext,
 }: WidgetComponentProps) {
   return (
     <LiveDataView
       state={tideState}
       sourceName="NOAA tides"
-      loadingDetail="Determining the current tide movement."
+      loadingDetail="Loading tide movement and turns."
     >
-      {(data) => (
-        <MetricValue
-          value={capitalize(data.currentTrend)}
-          detail={formatTurnCountdown(
-            data.minutesUntilTurn,
-          )}
-        />
-      )}
+      {(data) => {
+        const isToday =
+          forecastContext.selectedDate ===
+          forecastContext.todayDate;
+
+        if (isToday) {
+          return (
+            <MetricValue
+              value={capitalize(data.currentTrend)}
+              detail={formatTurnCountdown(
+                data.minutesUntilTurn,
+              )}
+            />
+          );
+        }
+
+        const events = eventsForDate(
+          data,
+          forecastContext.selectedDate,
+        );
+
+        return (
+          <MetricValue
+            value={
+              events.length === 0
+                ? "Unavailable"
+                : `${events.length} tide turns`
+            }
+            detail={
+              events.length > 0
+                ? events
+                    .map(
+                      (event) =>
+                        `${capitalize(
+                          event.type,
+                        )} ${event.displayTime}`,
+                    )
+                    .join(" · ")
+                : "No tide events were returned for this date."
+            }
+          />
+        );
+      }}
     </LiveDataView>
   );
 }
@@ -99,6 +157,7 @@ export function TideStatusWidget({
 export function TideTimelineWidget({
   widget,
   tideState,
+  forecastContext,
 }: WidgetComponentProps) {
   const displayMode = stringSetting(
     widget.settings,
@@ -115,6 +174,12 @@ export function TideTimelineWidget({
     "showHighLowLabels",
     true,
   );
+  const compact =
+    stringSetting(
+      widget.settings,
+      "density",
+      "standard",
+    ) === "compact";
 
   return (
     <LiveDataView
@@ -122,29 +187,60 @@ export function TideTimelineWidget({
       sourceName="NOAA tides"
       loadingDetail="Loading high, low, and six-minute predictions."
     >
-      {(data) =>
-        displayMode === "chart" ? (
+      {(data) => {
+        const events = eventsForDate(
+          data,
+          forecastContext.selectedDate,
+        );
+        const timeline = data.timeline.filter(
+          (point) =>
+            point.localTime.slice(0, 10) ===
+            forecastContext.selectedDate,
+        );
+        const isToday =
+          forecastContext.selectedDate ===
+          forecastContext.todayDate;
+        const visibleEvents = isToday
+          ? events.filter(
+              (event) =>
+                event.localTime >=
+                data.currentLocalTime,
+            )
+          : events;
+
+        if (events.length === 0) {
+          return (
+            <WidgetDataMessage
+              title="Tide forecast unavailable"
+              detail={`This NOAA station did not return tide predictions for ${formatForecastDateLabel(
+                {
+                  date: forecastContext.selectedDate,
+                  todayDate:
+                    forecastContext.todayDate,
+                },
+              )}.`}
+            />
+          );
+        }
+
+        return displayMode === "chart" && !compact ? (
           <TideChart
-            events={data.events}
-            timeline={data.timeline}
+            events={events}
+            timeline={timeline}
             currentLocalTime={
               data.currentLocalTime
             }
             showCurrentMarker={
-              showCurrentMarker
+              isToday && showCurrentMarker
             }
             showHighLowLabels={
-              showHighLowLabels
+              showHighLowLabels && !compact
             }
+            compact={compact}
           />
         ) : (
           <CompactTimeline
-            columns={data.events
-              .filter(
-                (event) =>
-                  event.localTime >
-                  data.currentLocalTime,
-              )
+            columns={visibleEvents
               .slice(0, 4)
               .map((event) => ({
                 label:
@@ -158,8 +254,8 @@ export function TideTimelineWidget({
                 ),
               }))}
           />
-        )
-      }
+        );
+      }}
     </LiveDataView>
   );
 }
@@ -202,6 +298,33 @@ export function TideStationWidget({
         />
       )}
     </LiveDataView>
+  );
+}
+
+function eventsForDate(
+  data: TideSourceData,
+  date: string,
+): TideEvent[] {
+  return data.events.filter(
+    (event) =>
+      event.localTime.slice(0, 10) === date,
+  );
+}
+
+function findSelectedEvent(
+  data: TideSourceData,
+  selectedDate: string,
+  todayDate: string,
+  type: TideEvent["type"],
+): TideEvent | null {
+  return (
+    eventsForDate(data, selectedDate).find(
+      (event) =>
+        event.type === type &&
+        (selectedDate !== todayDate ||
+          event.localTime >=
+            data.currentLocalTime),
+    ) ?? null
   );
 }
 

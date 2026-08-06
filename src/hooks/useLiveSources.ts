@@ -53,11 +53,13 @@ export function useMarineSources(
 
 export function useAstronomySources(
   sources: DashboardSource[],
+  selectedDate: string,
 ): AstronomySourceStateMap {
   return useLiveSourceStates<AstronomySourceData>(
     sources,
     "astronomy-location",
     buildAstronomyUrl,
+    selectedDate,
   );
 }
 
@@ -74,7 +76,11 @@ export function useRadarSources(
 function useLiveSourceStates<TData>(
   sources: DashboardSource[],
   kind: LiveKind,
-  buildUrl: (source: DashboardSource) => string,
+  buildUrl: (
+    source: DashboardSource,
+    requestContext?: string,
+  ) => string,
+  requestContext?: string,
 ): LiveSourceStateMap<TData> {
   const [storedStates, setStoredStates] =
     useState<StoredSourceStateMap<TData>>({});
@@ -92,10 +98,10 @@ function useLiveSourceStates<TData>(
 
     for (const source of matchingSources) {
       const requestKey =
-        createRequestKey(source);
+        createRequestKey(source, requestContext);
 
       void loadSource<TData>(
-        buildUrl(source),
+        buildUrl(source, requestContext),
         controller.signal,
       )
         .then((data) => {
@@ -138,14 +144,14 @@ function useLiveSourceStates<TData>(
     return () => {
       controller.abort();
     };
-  }, [buildUrl, matchingSources]);
+  }, [buildUrl, matchingSources, requestContext]);
 
   return useMemo(() => {
     const states: LiveSourceStateMap<TData> = {};
 
     for (const source of matchingSources) {
       const requestKey =
-        createRequestKey(source);
+        createRequestKey(source, requestContext);
       const stored = storedStates[source.id];
 
       states[source.id] =
@@ -155,7 +161,7 @@ function useLiveSourceStates<TData>(
     }
 
     return states;
-  }, [matchingSources, storedStates]);
+  }, [matchingSources, requestContext, storedStates]);
 }
 
 async function loadSource<TData>(
@@ -236,6 +242,7 @@ function buildMarineUrl(
 
 function buildAstronomyUrl(
   source: DashboardSource,
+  selectedDate?: string,
 ): string {
   assertCoordinates(source);
 
@@ -243,6 +250,9 @@ function buildAstronomyUrl(
     latitude: source.latitude.toString(),
     longitude: source.longitude.toString(),
     timezone: source.timezone ?? "UTC",
+    ...(selectedDate
+      ? { date: selectedDate }
+      : {}),
   });
 
   return `/api/astronomy?${search}`;
@@ -263,6 +273,7 @@ function buildRadarUrl(
 
 function createRequestKey(
   source: DashboardSource,
+  requestContext?: string,
 ): string {
   return JSON.stringify({
     id: source.id,
@@ -273,6 +284,7 @@ function createRequestKey(
     timezone: source.timezone,
     externalId: source.externalId,
     settings: source.settings,
+    requestContext,
   });
 }
 

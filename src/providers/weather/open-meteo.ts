@@ -122,7 +122,6 @@ function normalizeOpenMeteoResponse(
 
   const hourly = raw.hourly.time
     .map((time, index) => ({ time, index }))
-    .slice(currentHourIndex, currentHourIndex + 48)
     .map(({ time, index }) => {
       const temperatureC = raw.hourly.temperature_2m[index];
       const apparentTemperatureC =
