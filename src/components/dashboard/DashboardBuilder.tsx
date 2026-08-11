@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type {
   DashboardLayout,
@@ -43,6 +43,20 @@ import {
   BuilderPreview,
   type PreviewZoom,
 } from "@/components/builder/BuilderPreview";
+import { AuthDialog } from "@/components/auth/AuthDialog";
+import { AccountMenu } from "@/components/auth/AccountMenu";
+import { SaveOptionsDialog } from "@/components/auth/SaveOptionsDialog";
+import { useAuth } from "@/components/auth/AuthProvider";
+import {
+  hasPendingCloudSave,
+  loadCloudDashboard,
+  loadLocalDashboardDraft,
+  loadSharedDashboard,
+  saveCloudDashboard,
+  saveLocalDashboardDraft,
+  saveSharedDashboard,
+  setPendingCloudSave,
+} from "@/lib/dashboard-storage";
 
 export function DashboardBuilder() {
   const [dashboard, setDashboard] =
@@ -62,6 +76,237 @@ export function DashboardBuilder() {
   const [showGrid, setShowGrid] = useState(true);
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
     useState<string>();
+  const { user, loading: authLoading } =
+    useAuth();
+  const [authOpen, setAuthOpen] =
+    useState(false);
+  const [
+    saveOptionsMode,
+    setSaveOptionsMode,
+  ] = useState<
+    "guest" | "url-only" | null
+  >(null);
+  const [sharedDashboardToken, setSharedDashboardToken] =
+    useState<string>();
+  const [sharedUrl, setSharedUrl] =
+    useState<string>();
+  const [sharedExpiresAt, setSharedExpiresAt] =
+    useState<string>();
+  const [sharedSaveError, setSharedSaveError] =
+    useState<string>();
+  const [savingSharedUrl, setSavingSharedUrl] =
+    useState(false);
+  const [cloudDashboardId, setCloudDashboardId] =
+    useState<string>();
+  const [saveState, setSaveState] =
+    useState<
+      "idle" | "saving" | "saved" | "error"
+    >("idle");
+  const [saveMessage, setSaveMessage] =
+    useState<string>();
+  const [draftReady, setDraftReady] =
+    useState(false);
+  const cloudLoadAttempted =
+    useRef<string | undefined>(undefined);
+  const sharedLoadAttempted =
+    useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+    const cloudId =
+      params.get("dashboard");
+    const shareToken =
+      params.get("share");
+
+    if (shareToken) {
+      setSharedDashboardToken(
+        shareToken,
+      );
+    }
+
+    if (!cloudId && !shareToken) {
+      const localDraft =
+        loadLocalDashboardDraft();
+
+      if (localDraft) {
+        setDashboard(localDraft);
+        setActiveLayoutId(
+          localDraft.layouts[0]?.id ??
+            dashboard.layouts[0].id,
+        );
+      }
+    }
+
+    setDraftReady(true);
+    // The initial dashboard is intentionally used
+    // only as a fallback for the first local restore.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady) {
+      return;
+    }
+
+    saveLocalDashboardDraft(dashboard);
+
+    if (saveState === "saved") {
+      setSaveState("idle");
+    }
+  }, [dashboard, draftReady, saveState]);
+
+  useEffect(() => {
+    if (
+      !draftReady ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const shareToken =
+      new URLSearchParams(
+        window.location.search,
+      ).get("share");
+
+    if (
+      !shareToken ||
+      sharedLoadAttempted.current ===
+        shareToken
+    ) {
+      return;
+    }
+
+    sharedLoadAttempted.current =
+      shareToken;
+    setSaveState("saving");
+    setSaveMessage(
+      "Loading saved URL…",
+    );
+
+    void loadSharedDashboard(shareToken)
+      .then(
+        ({
+          dashboard: savedDashboard,
+          expiresAt,
+        }) => {
+          setDashboard(savedDashboard);
+          setActiveLayoutId(
+            savedDashboard.layouts[0]?.id ??
+              savedDashboard.id,
+          );
+          setSharedDashboardToken(
+            shareToken,
+          );
+          setSharedExpiresAt(
+            expiresAt,
+          );
+          setCloudDashboardId(
+            undefined,
+          );
+          setSelectedWidgetId(
+            undefined,
+          );
+          setSaveState("saved");
+          setSaveMessage(
+            "Loaded from saved URL. Its 90-day timer was renewed.",
+          );
+        },
+      )
+      .catch((caught: unknown) => {
+        setSaveState("error");
+        setSaveMessage(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to load this saved URL.",
+        );
+      });
+  }, [draftReady]);
+
+  useEffect(() => {
+    if (
+      authLoading ||
+      !user ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search,
+      );
+    const cloudId =
+      params.get("dashboard");
+    const shareToken =
+      params.get("share");
+
+    if (shareToken) {
+      return;
+    }
+
+    const ignoredCloudId = cloudId;
+
+    if (
+      !ignoredCloudId ||
+      cloudLoadAttempted.current ===
+        ignoredCloudId
+    ) {
+      return;
+    }
+
+    cloudLoadAttempted.current =
+      ignoredCloudId;
+    setSaveState("saving");
+    setSaveMessage("Loading saved dashboard…");
+
+    void loadCloudDashboard(
+      ignoredCloudId,
+    )
+      .then((savedDashboard) => {
+        setDashboard(savedDashboard);
+        setActiveLayoutId(
+          savedDashboard.layouts[0]?.id ??
+            savedDashboard.id,
+        );
+        setCloudDashboardId(
+          ignoredCloudId,
+        );
+        setSelectedWidgetId(undefined);
+        setSaveState("saved");
+        setSaveMessage("Loaded from your account.");
+      })
+      .catch((caught: unknown) => {
+        setSaveState("error");
+        setSaveMessage(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to load this dashboard.",
+        );
+      });
+  }, [authLoading, user]);
+
+  useEffect(() => {
+    if (
+      authLoading ||
+      !user ||
+      !draftReady ||
+      !hasPendingCloudSave()
+    ) {
+      return;
+    }
+
+    void saveCurrentDashboard(user);
+    // saveCurrentDashboard intentionally reads
+    // the latest dashboard state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, draftReady, user]);
 
   const weatherStates = useWeatherSources(
     dashboard.sources,
@@ -480,6 +725,150 @@ export function DashboardBuilder() {
     }));
   }
 
+
+  async function saveCurrentDashboard(
+    authenticatedUser = user,
+  ) {
+    if (!authenticatedUser) {
+      setPendingCloudSave(true);
+      setAuthOpen(true);
+      return;
+    }
+
+    setSaveState("saving");
+    setSaveMessage("Saving dashboard…");
+
+    try {
+      const saved =
+        await saveCloudDashboard({
+          dashboard,
+          user: authenticatedUser,
+          cloudId: cloudDashboardId,
+        });
+
+      setCloudDashboardId(saved.id);
+      setPendingCloudSave(false);
+      setSaveState("saved");
+      setSaveMessage("Saved to your account.");
+
+      if (typeof window !== "undefined") {
+        const url = new URL(
+          window.location.href,
+        );
+        url.searchParams.set(
+          "dashboard",
+          saved.id,
+        );
+        url.searchParams.delete(
+          "share",
+        );
+        setSharedDashboardToken(
+          undefined,
+        );
+        window.history.replaceState(
+          {},
+          "",
+          url,
+        );
+      }
+    } catch (caught) {
+      setSaveState("error");
+      setSaveMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to save dashboard.",
+      );
+    }
+  }
+
+  function handleSave() {
+    if (!user) {
+      setSharedUrl(undefined);
+      setSharedSaveError(undefined);
+      setSaveOptionsMode("guest");
+      return;
+    }
+
+    void saveCurrentDashboard(user);
+  }
+
+  function handleAccountSaveFromOptions() {
+    setSaveOptionsMode(null);
+    setPendingCloudSave(true);
+    setAuthOpen(true);
+  }
+
+  function handleOpenUrlSave() {
+    setSharedUrl(undefined);
+    setSharedSaveError(undefined);
+    setSaveOptionsMode("url-only");
+  }
+
+  async function handleSaveToUrl() {
+    setSavingSharedUrl(true);
+    setSharedSaveError(undefined);
+
+    try {
+      const saved =
+        await saveSharedDashboard({
+          dashboard,
+          existingShareToken:
+            sharedDashboardToken,
+        });
+
+      const url =
+        new URL(window.location.href);
+      url.searchParams.delete(
+        "dashboard",
+      );
+      url.searchParams.set(
+        "share",
+        saved.shareToken,
+      );
+
+      const shareUrl =
+        url.toString();
+
+      setSharedDashboardToken(
+        saved.shareToken,
+      );
+      setSharedUrl(shareUrl);
+      setSharedExpiresAt(
+        saved.expiresAt,
+      );
+      setSaveState("saved");
+      setSaveMessage(
+        saved.updatedExisting
+          ? "Saved URL updated. Its 90-day timer was renewed."
+          : "Saved to an anonymous URL.",
+      );
+
+      /*
+       * For guests, make the anonymous URL the current editor URL so
+       * refresh/reopen keeps the saved dashboard. Signed-in users keep
+       * their account-dashboard URL and receive a separate share link.
+       */
+      if (!user) {
+        window.history.replaceState(
+          {},
+          "",
+          url,
+        );
+      }
+    } catch (caught) {
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Unable to save this dashboard to a URL.";
+
+      setSharedSaveError(message);
+      setSaveState("error");
+      setSaveMessage(message);
+    } finally {
+      setSavingSharedUrl(false);
+    }
+  }
+
   if (!activeLayout) {
     return null;
   }
@@ -551,14 +940,42 @@ export function DashboardBuilder() {
           ))}
           <button
             type="button"
-            disabled
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white opacity-60"
-            title="Saving will be added after the editor model is finalized."
+            onClick={handleSave}
+            disabled={saveState === "saving"}
+            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           >
-            Save
+            {saveState === "saving"
+              ? "Saving..."
+              : saveState === "saved"
+                ? "Saved"
+                : "Save"}
           </button>
+
+          <button
+            type="button"
+            onClick={handleOpenUrlSave}
+            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+          >
+            Save URL
+          </button>
+
+          <AccountMenu />
         </div>
       </header>
+
+      {saveMessage ? (
+        <div
+          className={[
+            "border-b px-5 py-2 text-center text-xs",
+            saveState === "error"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-[var(--border)] bg-[var(--surface-muted)] text-[var(--muted)]",
+          ].join(" ")}
+          role="status"
+        >
+          {saveMessage}
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col lg:h-[calc(100vh-65px)] lg:flex-row">
         <BuilderToolbar
@@ -631,6 +1048,31 @@ export function DashboardBuilder() {
           onPlacementsChange={updatePlacements}
         />
       </div>
+
+      <SaveOptionsDialog
+        open={saveOptionsMode !== null}
+        mode={saveOptionsMode ?? "guest"}
+        savingUrl={savingSharedUrl}
+        sharedUrl={sharedUrl}
+        expiresAt={sharedExpiresAt}
+        error={sharedSaveError}
+        onClose={() =>
+          setSaveOptionsMode(null)
+        }
+        onSaveToAccount={
+          handleAccountSaveFromOptions
+        }
+        onSaveToUrl={() =>
+          void handleSaveToUrl()
+        }
+      />
+
+      <AuthDialog
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialMode="signup"
+        intent="Save your dashboard"
+      />
     </main>
   );
 }
