@@ -114,6 +114,24 @@ export type SharedDashboardLoadResult = {
   expiresAt: string;
 };
 
+type UpdateSharedDashboardRpcRow = {
+  share_token: string;
+  expires_at: string;
+};
+
+type CreateSharedDashboardRpcRow = {
+  share_token: string;
+  edit_token: string;
+  expires_at: string;
+};
+
+type GetSharedDashboardRpcRow = {
+  name: string;
+  dashboard_data: unknown;
+  schema_version: number;
+  expires_at: string;
+};
+
 export async function saveSharedDashboard({
   dashboard,
   existingShareToken,
@@ -148,13 +166,18 @@ export async function saveSharedDashboard({
         throw new Error(error.message);
       }
 
-      if (data) {
+      const updatedRow =
+        data as
+          | UpdateSharedDashboardRpcRow
+          | null;
+
+      if (updatedRow) {
         return {
           shareToken: String(
-            data.share_token,
+            updatedRow.share_token,
           ),
           expiresAt: String(
-            data.expires_at,
+            updatedRow.expires_at,
           ),
           updatedExisting: true,
         };
@@ -177,11 +200,14 @@ export async function saveSharedDashboard({
     throw new Error(error.message);
   }
 
+  const createdRow =
+    data as CreateSharedDashboardRpcRow;
+
   const shareToken = String(
-    data.share_token,
+    createdRow.share_token,
   );
   const editToken = String(
-    data.edit_token,
+    createdRow.edit_token,
   );
 
   storeSharedEditToken(
@@ -192,7 +218,7 @@ export async function saveSharedDashboard({
   return {
     shareToken,
     expiresAt: String(
-      data.expires_at,
+      createdRow.expires_at,
     ),
     updatedExisting: false,
   };
@@ -217,14 +243,19 @@ export async function loadSharedDashboard(
     throw new Error(error.message);
   }
 
-  if (!data) {
+  const sharedRow =
+    data as
+      | GetSharedDashboardRpcRow
+      | null;
+
+  if (!sharedRow) {
     throw new Error(
       "This saved dashboard URL has expired or does not exist.",
     );
   }
 
   const dashboard =
-    data.dashboard_data as unknown as
+    sharedRow.dashboard_data as
       FishingDashboard;
 
   if (
@@ -241,7 +272,7 @@ export async function loadSharedDashboard(
   return {
     dashboard,
     expiresAt: String(
-      data.expires_at,
+      sharedRow.expires_at,
     ),
   };
 }
