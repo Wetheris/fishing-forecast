@@ -28,6 +28,7 @@ export type WidgetKey =
   | "tide-status"
   | "tide-timeline"
   | "tide-station"
+  | "water-temperature"
   | "wave-height"
   | "wave-direction"
   | "wave-period"

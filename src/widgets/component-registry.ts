@@ -24,6 +24,7 @@ import {
 } from "@/widgets/tides/TideWidgets";
 import {
   SwellInformationWidget,
+  WaterTemperatureWidget,
   WaveDirectionWidget,
   WaveHeightWidget,
   WavePeriodWidget,
@@ -58,6 +59,7 @@ export const widgetComponents: Record<
   "tide-status": TideStatusWidget,
   "tide-timeline": TideTimelineWidget,
   "tide-station": TideStationWidget,
+  "water-temperature": WaterTemperatureWidget,
   "wave-height": WaveHeightWidget,
   "wave-direction": WaveDirectionWidget,
   "wave-period": WavePeriodWidget,

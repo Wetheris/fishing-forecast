@@ -6,12 +6,120 @@ import {
 } from "@/widgets/shared/WidgetPrimitives";
 import { LiveDataView } from "@/widgets/shared/LiveDataView";
 import {
+  celsiusToFahrenheit,
   metersToFeet,
   roundToTenth,
 } from "@/lib/units";
-import { stringSetting } from "@/lib/widget-settings";
+import {
+  booleanSetting,
+  stringSetting,
+} from "@/lib/widget-settings";
 import { formatForecastDateLabel } from "@/lib/forecast-selection";
 import type { MarineHour } from "@/types/source-data";
+
+export function WaterTemperatureWidget({
+  widget,
+  marineState,
+  forecastContext,
+}: WidgetComponentProps) {
+  return (
+    <LiveDataView
+      state={marineState}
+      sourceName="marine forecast"
+      loadingDetail="Fetching sea-surface temperature."
+    >
+      {(data) => {
+        const isToday =
+          forecastContext.selectedDate ===
+          forecastContext.todayDate;
+        const showIcon = booleanSetting(
+          widget.settings,
+          "showIcon",
+          true,
+        );
+
+        if (isToday) {
+          const temperature =
+            data.current.seaSurfaceTemperatureC;
+
+          if (temperature === null) {
+            return missingWaterTemperature(
+              forecastContext.selectedDate,
+              forecastContext.todayDate,
+            );
+          }
+
+          return (
+            <div className="flex h-full min-h-0 items-center gap-3">
+              {showIcon ? (
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 text-3xl"
+                >
+                  🌊
+                </span>
+              ) : null}
+              <div className="min-w-0 flex-1">
+                <MetricValue
+                  value={formatTemperature(
+                    temperature,
+                    widget,
+                  )}
+                  detail={`${roundToTenth(
+                    data.resolvedGrid.distanceMiles,
+                  )} mi to SST model grid`}
+                />
+              </div>
+            </div>
+          );
+        }
+
+        const hours = marineHoursForDate(
+          data.hourly,
+          forecastContext.selectedDate,
+        );
+        const temperatures = hours
+          .map(
+            (hour) =>
+              hour.seaSurfaceTemperatureC,
+          )
+          .filter(
+            (value): value is number =>
+              value !== null,
+          );
+
+        if (temperatures.length === 0) {
+          return missingWaterTemperature(
+            forecastContext.selectedDate,
+            forecastContext.todayDate,
+          );
+        }
+
+        return (
+          <div className="flex h-full min-h-0 items-center gap-3">
+            {showIcon ? (
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-3xl"
+              >
+                🌊
+              </span>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <MetricValue
+                value={formatTemperatureRange(
+                  temperatures,
+                  widget,
+                )}
+                detail="Forecast sea-surface temperature range"
+              />
+            </div>
+          </div>
+        );
+      }}
+    </LiveDataView>
+  );
+}
 
 export function WaveHeightWidget({
   widget,
@@ -288,6 +396,59 @@ function missingMarineForecast(
       )}.`}
     />
   );
+}
+
+function missingWaterTemperature(
+  date: string,
+  todayDate: string,
+) {
+  return (
+    <WidgetDataMessage
+      title="Water temperature unavailable"
+      detail={`Sea-surface temperature is not available for ${formatForecastDateLabel(
+        { date, todayDate },
+      )}.`}
+    />
+  );
+}
+
+function formatTemperature(
+  celsius: number,
+  widget: WidgetComponentProps["widget"],
+): string {
+  const unit = stringSetting(
+    widget.settings,
+    "unit",
+    "fahrenheit",
+  );
+
+  if (unit === "celsius") {
+    return `${roundToTenth(celsius)}°C`;
+  }
+
+  return `${roundToTenth(
+    celsiusToFahrenheit(celsius),
+  )}°F`;
+}
+
+function formatTemperatureRange(
+  values: number[],
+  widget: WidgetComponentProps["widget"],
+): string {
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const first = formatTemperature(
+    minimum,
+    widget,
+  );
+  const second = formatTemperature(
+    maximum,
+    widget,
+  );
+
+  return first === second
+    ? first
+    : `${first.replace(/[°][FC]$/, "")}–${second}`;
 }
 
 function formatLength(

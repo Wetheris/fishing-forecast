@@ -60,6 +60,7 @@ export type TideSourceData = {
 
 export type MarineHour = {
   time: string;
+  seaSurfaceTemperatureC: number | null;
   waveHeightM: number;
   waveDirectionDegrees: number;
   waveDirectionLabel: string;

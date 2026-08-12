@@ -15,6 +15,7 @@ type OpenMeteoMarineResponse = {
 
   current?: {
     time?: string;
+    sea_surface_temperature?: MarineValue;
     wave_height?: MarineValue;
     wave_direction?: MarineValue;
     wave_period?: MarineValue;
@@ -25,6 +26,7 @@ type OpenMeteoMarineResponse = {
 
   hourly: {
     time: string[];
+    sea_surface_temperature: MarineValue[];
     wave_height: MarineValue[];
     wave_direction: MarineValue[];
     wave_period: MarineValue[];
@@ -47,6 +49,7 @@ export async function fetchOpenMeteoMarine(
   );
 
   const variables = [
+    "sea_surface_temperature",
     "wave_height",
     "wave_direction",
     "wave_period",
@@ -99,6 +102,8 @@ function normalizeMarineResponse(
     .map((time, index) =>
       normalizeHour({
         time,
+        seaSurfaceTemperature:
+          raw.hourly.sea_surface_temperature[index],
         waveHeight:
           raw.hourly.wave_height[index],
         waveDirection:
@@ -119,12 +124,14 @@ function normalizeMarineResponse(
 
   if (hourly.length === 0) {
     throw new Error(
-      "Open-Meteo Marine returned no usable wave forecast.",
+      "Open-Meteo Marine returned no usable marine forecast.",
     );
   }
 
   const currentFromApi = normalizeHour({
     time: raw.current?.time ?? hourly[0].time,
+    seaSurfaceTemperature:
+      raw.current?.sea_surface_temperature,
     waveHeight: raw.current?.wave_height,
     waveDirection: raw.current?.wave_direction,
     wavePeriod: raw.current?.wave_period,
@@ -164,6 +171,7 @@ function normalizeMarineResponse(
 
 function normalizeHour({
   time,
+  seaSurfaceTemperature,
   waveHeight,
   waveDirection,
   wavePeriod,
@@ -172,6 +180,7 @@ function normalizeHour({
   swellPeriod,
 }: {
   time: string;
+  seaSurfaceTemperature: MarineValue | undefined;
   waveHeight: MarineValue | undefined;
   waveDirection: MarineValue | undefined;
   wavePeriod: MarineValue | undefined;
@@ -189,6 +198,8 @@ function normalizeHour({
 
   return {
     time,
+    seaSurfaceTemperatureC:
+      finiteOrNull(seaSurfaceTemperature),
     waveHeightM: waveHeight,
     waveDirectionDegrees: waveDirection,
     waveDirectionLabel:

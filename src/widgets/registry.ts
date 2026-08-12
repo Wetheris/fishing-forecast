@@ -319,6 +319,21 @@ export const widgetDefinitions: WidgetDefinition[] = [
     defaultPlacement: placements(mediumDesktop, mediumMobile),
   },
   {
+    key: "water-temperature",
+    name: "Water Temperature",
+    description:
+      "Modeled sea-surface temperature for the selected marine location.",
+    category: "waves",
+    sourceKind: "marine-location",
+    defaultTitle: "Water Temperature",
+    defaultSettings: {
+      unit: "fahrenheit",
+      showIcon: true,
+      showSourceLabel: true,
+    },
+    defaultPlacement: placements(metricDesktop, metricMobile),
+  },
+  {
     key: "wave-height",
     name: "Wave Height",
     description: "Current significant wave height.",
@@ -426,7 +441,7 @@ export const categoryLabels: Record<WidgetCategory, string> = {
   weather: "Weather",
   wind: "Wind",
   tides: "Tides",
-  waves: "Waves",
+  waves: "Marine",
   "moon-sun": "Moon & Sun",
 };
 
