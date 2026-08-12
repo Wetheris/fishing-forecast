@@ -141,8 +141,8 @@ export function BuilderPreview({
     contentHeight > layout.viewport.height;
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-white px-3 py-2">
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-white px-3 py-2">
         <div>
           <p className="text-sm font-medium">
             {layout.name} preview
@@ -208,11 +208,12 @@ export function BuilderPreview({
 
       <div
         ref={stageRef}
-        className="builder-scrollbar relative min-h-[560px] flex-1 overflow-auto bg-[#e8eef0]"
+        className="builder-scrollbar relative min-h-0 flex-1 overflow-auto bg-[#e8eef0]"
         style={{
           scrollbarGutter: "stable both-edges",
           overflowAnchor: "none",
           overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         <div className="flex min-h-full min-w-full items-start justify-center p-4 sm:p-5">
