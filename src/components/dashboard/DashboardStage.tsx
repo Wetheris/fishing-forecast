@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   DashboardLayout,
   FishingDashboard,
@@ -86,13 +91,18 @@ export function DashboardStage({
     };
   }, []);
 
-  const contentHeight = getLayoutContentHeight(layout);
+  const contentHeight =
+    getLayoutContentHeight(layout);
   const titleHeight =
     layout.device === "mobile" ? 82 : 104;
-  const totalHeight = titleHeight + contentHeight;
+  const totalHeight =
+    titleHeight + contentHeight;
   const scale = Math.min(
     1,
-    Math.max(0.2, stageWidth / layout.viewport.width),
+    Math.max(
+      0.2,
+      stageWidth / layout.viewport.width,
+    ),
   );
   const displayedWidth = Math.round(
     layout.viewport.width * scale,
@@ -100,6 +110,31 @@ export function DashboardStage({
   const displayedHeight = Math.round(
     totalHeight * scale,
   );
+
+  const primaryLocation =
+    dashboard.sources.find(
+      (source) =>
+        source.kind ===
+        "weather-location" &&
+        typeof source.latitude ===
+          "number" &&
+        typeof source.longitude ===
+          "number",
+    );
+  const sessionsHref =
+    primaryLocation &&
+    typeof primaryLocation.latitude ===
+      "number" &&
+    typeof primaryLocation.longitude ===
+      "number"
+      ? `/sessions?latitude=${encodeURIComponent(
+          primaryLocation.latitude,
+        )}&longitude=${encodeURIComponent(
+          primaryLocation.longitude,
+        )}&label=${encodeURIComponent(
+          primaryLocation.label,
+        )}`
+      : "/sessions";
 
   return (
     <div
@@ -126,26 +161,39 @@ export function DashboardStage({
           }}
         >
           <header
-            className="flex flex-col justify-center"
+            className="flex items-center justify-between gap-4"
             style={{
               height: titleHeight,
               paddingInline:
-                layout.device === "mobile" ? 16 : 28,
+                layout.device === "mobile"
+                  ? 16
+                  : 28,
             }}
           >
-            <h1
-              className={
-                layout.device === "mobile"
-                  ? "text-2xl font-semibold"
-                  : "text-3xl font-semibold"
-              }
-            >
-              {dashboard.name}
-            </h1>
-            {subtitle ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {subtitle}
-              </p>
+            <div className="min-w-0">
+              <h1
+                className={
+                  layout.device === "mobile"
+                    ? "truncate text-2xl font-semibold"
+                    : "truncate text-3xl font-semibold"
+                }
+              >
+                {dashboard.name}
+              </h1>
+              {subtitle ? (
+                <p className="mt-1 truncate text-sm text-[var(--muted)]">
+                  {subtitle}
+                </p>
+              ) : null}
+            </div>
+
+            {mode === "view" ? (
+              <Link
+                href={sessionsHref}
+                className="mr-16 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
+              >
+                🎣 Sessions
+              </Link>
             ) : null}
           </header>
 
@@ -160,14 +208,26 @@ export function DashboardStage({
             astronomyStates={astronomyStates}
             radarStates={radarStates}
             forecastContext={forecastContext}
-            onForecastDateChange={onForecastDateChange}
-            onWidgetSettingsChange={onWidgetSettingsChange}
+            onForecastDateChange={
+              onForecastDateChange
+            }
+            onWidgetSettingsChange={
+              onWidgetSettingsChange
+            }
             mode={mode}
             scale={scale}
-            showGrid={showGrid && mode === "edit"}
-            selectedWidgetId={selectedWidgetId}
-            onSelectWidget={onSelectWidget}
-            onPlacementsChange={onPlacementsChange}
+            showGrid={
+              showGrid && mode === "edit"
+            }
+            selectedWidgetId={
+              selectedWidgetId
+            }
+            onSelectWidget={
+              onSelectWidget
+            }
+            onPlacementsChange={
+              onPlacementsChange
+            }
           />
         </div>
       </div>

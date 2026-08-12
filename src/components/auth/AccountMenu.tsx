@@ -44,7 +44,14 @@ export function AccountMenu() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
+      <Link
+        href="/sessions"
+        className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+      >
+        Sessions
+      </Link>
+
       <Link
         href="/dashboards"
         className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
