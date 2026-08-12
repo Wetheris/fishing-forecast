@@ -782,19 +782,32 @@ export function DashboardBuilder() {
   }
 
   function handleSave() {
-    if (sharedDashboardToken) {
-      void handleSaveToUrl();
+    /*
+     * Signed-in users save their account dashboard with the
+     * primary Save button. Public URL publishing remains a
+     * separate action so the cloud copy cannot accidentally
+     * diverge from the user's account save flow.
+     */
+    if (user) {
+      void saveCurrentDashboard(user);
       return;
     }
 
-    if (!user) {
-      setSharedUrl(undefined);
-      setSharedSaveError(undefined);
-      setSaveOptionsMode("guest");
+    const existingShareToken =
+      getCurrentShareToken(
+        sharedDashboardToken,
+      );
+
+    if (existingShareToken) {
+      void handleSaveToUrl(
+        existingShareToken,
+      );
       return;
     }
 
-    void saveCurrentDashboard(user);
+    setSharedUrl(undefined);
+    setSharedSaveError(undefined);
+    setSaveOptionsMode("guest");
   }
 
   function handleAccountSaveFromOptions() {
@@ -804,28 +817,85 @@ export function DashboardBuilder() {
   }
 
   function handleOpenUrlSave() {
+    const currentShareToken =
+      getCurrentShareToken(
+        sharedDashboardToken,
+      );
+    const rememberedShareToken =
+      cloudDashboardId
+        ? loadRememberedCloudShareToken(
+            cloudDashboardId,
+          )
+        : undefined;
+    const existingShareToken =
+      currentShareToken ??
+      rememberedShareToken;
+
+    if (existingShareToken) {
+      setSharedDashboardToken(
+        existingShareToken,
+      );
+      void handleSaveToUrl(
+        existingShareToken,
+      );
+      return;
+    }
+
     setSharedUrl(undefined);
     setSharedSaveError(undefined);
     setSaveOptionsMode("url-only");
   }
 
-  async function handleSaveToUrl() {
+  async function handleSaveToUrl(
+    shareTokenOverride?: string,
+  ) {
+    const existingShareToken =
+      shareTokenOverride ??
+      getCurrentShareToken(
+        sharedDashboardToken,
+      );
+
     setSavingSharedUrl(true);
     setSharedSaveError(undefined);
     setSaveState("saving");
     setSaveMessage(
-      sharedDashboardToken
+      existingShareToken
         ? "Updating saved URL…"
         : "Saving dashboard to URL…",
     );
 
     try {
+      /*
+       * An existing shared URL is update-only. The edit
+       * token is intentionally browser-local; if it is gone,
+       * do not let saveSharedDashboard silently mint a
+       * replacement URL.
+       */
+      if (
+        existingShareToken &&
+        !hasSharedEditToken(
+          existingShareToken,
+        )
+      ) {
+        throw new Error(
+          "This browser no longer has permission to update the existing saved URL. A new URL was not created.",
+        );
+      }
+
       const saved =
         await saveSharedDashboard({
           dashboard,
-          existingShareToken:
-            sharedDashboardToken,
+          existingShareToken,
         });
+
+      if (
+        existingShareToken &&
+        !saved.updatedExisting
+      ) {
+        throw new Error(
+          "The existing saved URL could not be updated. A replacement URL will not be used automatically.",
+        );
+      }
 
       const editorUrl =
         new URL(window.location.href);
@@ -850,6 +920,13 @@ export function DashboardBuilder() {
       setSharedExpiresAt(
         saved.expiresAt,
       );
+
+      if (cloudDashboardId) {
+        rememberCloudShareToken(
+          cloudDashboardId,
+          saved.shareToken,
+        );
+      }
       setSaveState("saved");
       setSaveMessage(
         saved.updatedExisting
@@ -1112,6 +1189,73 @@ function createId(): string {
     .toString(16)
     .slice(2, 10);
 }
+
+
+const CLOUD_SHARE_KEY_PREFIX =
+  "fishing-forecast:cloud-share:";
+const SHARED_EDIT_KEY_PREFIX =
+  "fishing-forecast:shared-edit:";
+
+function getCurrentShareToken(
+  stateToken?: string,
+): string | undefined {
+  if (stateToken) {
+    return stateToken;
+  }
+
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (
+    new URLSearchParams(
+      window.location.search,
+    ).get("share") ?? undefined
+  );
+}
+
+function hasSharedEditToken(
+  shareToken: string,
+): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return Boolean(
+    window.localStorage.getItem(
+      `${SHARED_EDIT_KEY_PREFIX}${shareToken}`,
+    ),
+  );
+}
+
+function rememberCloudShareToken(
+  cloudDashboardId: string,
+  shareToken: string,
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    `${CLOUD_SHARE_KEY_PREFIX}${cloudDashboardId}`,
+    shareToken,
+  );
+}
+
+function loadRememberedCloudShareToken(
+  cloudDashboardId: string,
+): string | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (
+    window.localStorage.getItem(
+      `${CLOUD_SHARE_KEY_PREFIX}${cloudDashboardId}`,
+    ) ?? undefined
+  );
+}
+
 
 function dateKeyInTimezone(
   date: Date,
