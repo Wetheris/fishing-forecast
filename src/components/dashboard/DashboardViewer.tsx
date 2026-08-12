@@ -15,6 +15,7 @@ import type { ForecastContext } from "@/types/forecast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { DashboardStage } from "@/components/dashboard/DashboardStage";
+import { DashboardShareDialog } from "@/components/dashboard/DashboardShareDialog";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
   useAstronomySources,
@@ -27,8 +28,13 @@ import {
   loadCloudDashboard,
   loadLocalDashboardDraft,
   loadSharedDashboard,
+  saveSharedDashboard,
 } from "@/lib/dashboard-storage";
 import { createMobileLayoutFromDesktop } from "@/lib/dashboard-layouts";
+import {
+  celsiusToFahrenheit,
+  metersPerSecondToMph,
+} from "@/lib/units";
 
 const EMPTY_SOURCES: DashboardSource[] = [];
 
@@ -62,6 +68,16 @@ export function DashboardViewer() {
     useState(false);
   const [actionMessage, setActionMessage] =
     useState<string>();
+  const [shareOpen, setShareOpen] =
+    useState(false);
+  const [shareUrl, setShareUrl] =
+    useState<string>();
+  const [sharePreparing, setSharePreparing] =
+    useState(false);
+  const [shareError, setShareError] =
+    useState<string>();
+  const [controlsHidden, setControlsHidden] =
+    useState(false);
   const [deleting, setDeleting] =
     useState(false);
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
@@ -85,6 +101,51 @@ export function DashboardViewer() {
       media.removeEventListener("change", update);
     };
   }, []);
+
+  useEffect(() => {
+    let lastY = window.scrollY;
+    let frame = 0;
+
+    function handleScroll() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const nextY = window.scrollY;
+        const delta = nextY - lastY;
+
+        if (
+          actionsOpen ||
+          shareOpen ||
+          nextY < 72
+        ) {
+          setControlsHidden(false);
+        } else if (
+          delta > 5 &&
+          nextY > 110
+        ) {
+          setControlsHidden(true);
+          setActionsOpen(false);
+        } else if (delta < -5) {
+          setControlsHidden(false);
+        }
+
+        lastY = nextY;
+      });
+    }
+
+    window.addEventListener(
+      "scroll",
+      handleScroll,
+      { passive: true },
+    );
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener(
+        "scroll",
+        handleScroll,
+      );
+    };
+  }, [actionsOpen, shareOpen]);
 
   useEffect(() => {
     const params = new URLSearchParams(
@@ -282,6 +343,17 @@ export function DashboardViewer() {
         ) ?? viewerLayouts[0]
     : undefined;
 
+  const shareConditionSummary =
+    buildConditionSummary({
+      weatherSource:
+        primaryWeatherSource,
+      weatherStates,
+      sources,
+      tideStates,
+      marineStates,
+    });
+
+
   function updateWidgetSettings(
     widgetId: string,
     settings: Record<string, unknown>,
@@ -307,43 +379,88 @@ export function DashboardViewer() {
     );
   }
 
-  async function shareCurrentDashboard() {
+  async function openShareDialog() {
     if (!dashboard) {
       return;
     }
 
-    const url = window.location.href;
-    setActionMessage(undefined);
+    setActionsOpen(false);
+    setControlsHidden(false);
+    setShareOpen(true);
+    setSharePreparing(true);
+    setShareError(undefined);
 
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: dashboard.name,
-          url,
-        });
-        setActionMessage(
-          "Share menu opened.",
-        );
-        return;
+      let token: string;
+
+      if (viewerSource.kind === "shared") {
+        token = viewerSource.token;
+      } else if (viewerSource.kind === "cloud") {
+        const remembered =
+          loadRememberedShareToken(
+            `cloud:${viewerSource.id}`,
+          );
+
+        if (remembered) {
+          const saved =
+            await saveSharedDashboard({
+              dashboard,
+              existingShareToken:
+                remembered,
+            });
+          token = saved.shareToken;
+        } else {
+          const saved =
+            await saveSharedDashboard({
+              dashboard,
+            });
+          token = saved.shareToken;
+          rememberShareToken(
+            `cloud:${viewerSource.id}`,
+            token,
+          );
+        }
+      } else {
+        const remembered =
+          loadRememberedShareToken(
+            "local",
+          );
+
+        if (remembered) {
+          const saved =
+            await saveSharedDashboard({
+              dashboard,
+              existingShareToken:
+                remembered,
+            });
+          token = saved.shareToken;
+        } else {
+          const saved =
+            await saveSharedDashboard({
+              dashboard,
+            });
+          token = saved.shareToken;
+          rememberShareToken(
+            "local",
+            token,
+          );
+        }
       }
 
-      await navigator.clipboard.writeText(url);
-      setActionMessage(
-        "Dashboard link copied.",
+      setShareUrl(
+        `${window.location.origin}/view?share=${encodeURIComponent(
+          token,
+        )}`,
       );
     } catch (caught) {
-      if (
-        caught instanceof DOMException &&
-        caught.name === "AbortError"
-      ) {
-        return;
-      }
-
-      setActionMessage(
-        "Unable to share this link.",
+      setShareUrl(undefined);
+      setShareError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to prepare a shareable dashboard link.",
       );
     } finally {
-      setActionsOpen(false);
+      setSharePreparing(false);
     }
   }
 
@@ -446,6 +563,9 @@ export function DashboardViewer() {
 
   return (
     <main
+      data-dashboard-controls-hidden={
+        controlsHidden ? "true" : "false"
+      }
       className="dashboard-theme min-h-screen text-[var(--foreground)]"
       data-theme={dashboard.theme}
       style={{
@@ -469,7 +589,14 @@ export function DashboardViewer() {
         />
       ) : null}
 
-      <div className="fixed right-3 top-3 z-[900] flex items-center rounded-xl border border-[var(--border)] bg-white/95 shadow-md backdrop-blur">
+      <div
+        className={[
+          "fixed right-3 top-3 z-[900] flex items-center rounded-xl border border-[var(--border)] bg-white/95 shadow-md backdrop-blur transition duration-200",
+          controlsHidden
+            ? "-translate-y-16 opacity-0 pointer-events-none"
+            : "translate-y-0 opacity-100",
+        ].join(" ")}
+      >
         <Link
           href={editHref}
           aria-label="Edit dashboard"
@@ -496,34 +623,14 @@ export function DashboardViewer() {
 
           {actionsOpen ? (
             <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-1.5 text-[var(--foreground)] shadow-2xl">
-              {viewerSource.kind ===
-              "local" ? (
-                <ActionLink
-                  href="/build"
-                  icon="↗"
-                  label="Save URL to share"
-                  detail="Create a shareable dashboard link"
-                />
-              ) : (
-                <ActionButton
-                  icon="↑"
-                  label={
-                    viewerSource.kind ===
-                    "shared"
-                      ? "Share dashboard"
-                      : "Share account link"
-                  }
-                  detail={
-                    viewerSource.kind ===
-                    "shared"
-                      ? "Share this public dashboard URL"
-                      : "This link still requires your account"
-                  }
-                  onClick={() =>
-                    void shareCurrentDashboard()
-                  }
-                />
-              )}
+              <ActionButton
+                icon="↑"
+                label="Share dashboard"
+                detail="Preview the public link and share message"
+                onClick={() =>
+                  void openShareDialog()
+                }
+              />
 
               <ActionLink
                 href={sessionsHref}
@@ -576,6 +683,23 @@ export function DashboardViewer() {
           {actionMessage}
         </div>
       ) : null}
+
+      <DashboardShareDialog
+        open={shareOpen}
+        onClose={() =>
+          setShareOpen(false)
+        }
+        preparing={sharePreparing}
+        error={shareError}
+        shareUrl={shareUrl}
+        dashboardName={dashboard.name}
+        locationLabel={
+          primaryWeatherSource?.label
+        }
+        conditionSummary={
+          shareConditionSummary
+        }
+      />
 
       <DashboardStage
         dashboard={dashboard}
@@ -759,6 +883,189 @@ function getSessionsHref(
   )}&label=${encodeURIComponent(
     source.label,
   )}`;
+}
+
+const VIEWER_SHARE_KEY_PREFIX =
+  "fishing-forecast:viewer-share:";
+
+function rememberShareToken(
+  key: string,
+  shareToken: string,
+) {
+  if (
+    typeof window === "undefined"
+  ) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    `${VIEWER_SHARE_KEY_PREFIX}${key}`,
+    shareToken,
+  );
+
+  /*
+   * The builder already uses this key for account
+   * dashboards. Mirror it so sharing from either
+   * screen reuses the same public URL.
+   */
+  if (key.startsWith("cloud:")) {
+    window.localStorage.setItem(
+      `fishing-forecast:cloud-share:${key.slice(
+        "cloud:".length,
+      )}`,
+      shareToken,
+    );
+  }
+}
+
+function loadRememberedShareToken(
+  key: string,
+): string | undefined {
+  if (
+    typeof window === "undefined"
+  ) {
+    return undefined;
+  }
+
+  if (key.startsWith("cloud:")) {
+    const builderToken =
+      window.localStorage.getItem(
+        `fishing-forecast:cloud-share:${key.slice(
+          "cloud:".length,
+        )}`,
+      );
+
+    if (builderToken) {
+      return builderToken;
+    }
+  }
+
+  return (
+    window.localStorage.getItem(
+      `${VIEWER_SHARE_KEY_PREFIX}${key}`,
+    ) ?? undefined
+  );
+}
+
+function buildConditionSummary({
+  weatherSource,
+  weatherStates,
+  sources,
+  tideStates,
+  marineStates,
+}: {
+  weatherSource?: DashboardSource;
+  weatherStates: ReturnType<
+    typeof useWeatherSources
+  >;
+  sources: DashboardSource[];
+  tideStates: ReturnType<
+    typeof useTideSources
+  >;
+  marineStates: ReturnType<
+    typeof useMarineSources
+  >;
+}): string | undefined {
+  const parts: string[] = [];
+
+  if (weatherSource) {
+    const state =
+      weatherStates[
+        weatherSource.id
+      ];
+
+    if (state?.status === "success") {
+      const current =
+        state.data.current;
+      const temperature =
+        Math.round(
+          celsiusToFahrenheit(
+            current.temperatureC,
+          ),
+        );
+      const wind =
+        Math.round(
+          metersPerSecondToMph(
+            current.windSpeedMps,
+          ),
+        );
+
+      parts.push(
+        `${temperature}°F ${current.condition}`,
+      );
+      parts.push(
+        `Wind ${current.windDirectionLabel} ${wind} mph`,
+      );
+    }
+  }
+
+  const tideSource = sources.find(
+    (source) =>
+      source.kind === "tide-station",
+  );
+  const tideState = tideSource
+    ? tideStates[tideSource.id]
+    : undefined;
+
+  if (
+    tideState?.status === "success"
+  ) {
+    const tide = tideState.data;
+    const height =
+      tide.currentHeightFt === null
+        ? ""
+        : ` ${tide.currentHeightFt.toFixed(
+            1,
+          )} ft`;
+
+    parts.push(
+      `${titleCase(
+        tide.currentTrend,
+      )} tide${height}`,
+    );
+  }
+
+  const marineSource = sources.find(
+    (source) =>
+      source.kind ===
+      "marine-location",
+  );
+  const marineState = marineSource
+    ? marineStates[marineSource.id]
+    : undefined;
+
+  if (
+    marineState?.status ===
+      "success" &&
+    marineState.data.current
+      .seaSurfaceTemperatureC !== null
+  ) {
+    parts.push(
+      `Water ${Math.round(
+        celsiusToFahrenheit(
+          marineState.data.current
+            .seaSurfaceTemperatureC,
+        ),
+      )}°F`,
+    );
+  }
+
+  return parts.length > 0
+    ? parts.join(" · ")
+    : undefined;
+}
+
+function titleCase(
+  value: string,
+): string {
+  if (!value) {
+    return value;
+  }
+
+  return (
+    value[0].toUpperCase() +
+    value.slice(1)
+  );
 }
 
 function dateKeyInTimezone(

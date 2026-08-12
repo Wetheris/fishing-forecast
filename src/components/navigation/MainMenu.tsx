@@ -138,6 +138,7 @@ export function MainMenu() {
     <>
       <div
         data-main-menu-root
+        data-main-menu-open={open ? "true" : "false"}
         data-path={pathname}
       >
         <button
@@ -154,7 +155,7 @@ export function MainMenu() {
               (current) => !current,
             )
           }
-          className="fixed left-3 top-3 z-[950] flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white/95 text-xl text-[var(--foreground)] shadow-md backdrop-blur hover:bg-[var(--surface-muted)]"
+          className="fixed left-3 top-3 z-[950] flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white/95 text-xl text-[var(--foreground)] shadow-md backdrop-blur transition duration-200 hover:bg-[var(--surface-muted)]"
         >
           {open ? "×" : "☰"}
         </button>
@@ -183,6 +184,12 @@ export function MainMenu() {
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <MenuSection title="Navigate">
                   <MenuLink
+                    href="/"
+                    icon="⌂"
+                    label="Home"
+                    detail="App home"
+                  />
+                  <MenuLink
                     href="/view"
                     icon="▦"
                     label="Dashboard"
@@ -208,12 +215,6 @@ export function MainMenu() {
                     icon="☁"
                     label="My dashboards"
                     detail="Saved account dashboards"
-                  />
-                  <MenuLink
-                    href="/"
-                    icon="⌂"
-                    label="Home"
-                    detail="Back to the app home page"
                   />
                 </MenuSection>
 
@@ -357,12 +358,22 @@ export function MainMenu() {
           display: none;
         }
 
+        body:has([data-dashboard-controls-hidden="true"])
+          [data-main-menu-root][data-main-menu-open="false"]
+          [data-main-menu-button] {
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(-56px);
+        }
+
         body:has([data-main-menu-root][data-path="/build"])
           [data-builder-tools-open="false"] > header {
           padding-left: 4.25rem;
         }
 
-        body:has([data-main-menu-root])
+        body:has([data-main-menu-root][data-path^="/sessions"])
+          main > header > div,
+        body:has([data-main-menu-root][data-path="/dashboards"])
           main > header > div {
           padding-left: 4.75rem;
         }

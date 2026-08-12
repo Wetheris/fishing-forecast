@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import type {
+  MouseEvent,
+  ReactNode,
+} from "react";
 import type {
   DashboardSource,
   WidgetInstance,
@@ -54,6 +57,43 @@ export function WidgetShell({
   const effectiveShowSourceLabel =
     showSourceLabel && !compact;
 
+  function selectFromClick(
+    event: MouseEvent<HTMLElement>,
+  ) {
+    if (mode !== "edit") {
+      return;
+    }
+
+    const target =
+      event.target instanceof Element
+        ? event.target
+        : null;
+
+    /*
+     * Do not select/open the tools drawer when the user is
+     * dragging, resizing, or interacting with controls inside
+     * a widget. A normal click on the card still selects it.
+     */
+    if (
+      target?.closest(
+        [
+          ".widget-drag-handle",
+          ".react-resizable-handle",
+          "button",
+          "input",
+          "select",
+          "textarea",
+          "a",
+          "[role='button']",
+        ].join(","),
+      )
+    ) {
+      return;
+    }
+
+    onSelect?.();
+  }
+
   return (
     <article
       className={[
@@ -70,9 +110,7 @@ export function WidgetShell({
           ? "border-[var(--accent)] ring-2 ring-[var(--selection)]"
           : "border-[var(--border)]",
       ].join(" ")}
-      onMouseDown={
-        mode === "edit" ? onSelect : undefined
-      }
+      onClick={selectFromClick}
     >
       {showHeader ? (
         <header

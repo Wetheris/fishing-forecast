@@ -45,6 +45,14 @@ export function SourcesPanel({
     (source) =>
       source.kind === "weather-location",
   );
+  const marineSources = sources.filter(
+    (source) =>
+      source.kind === "marine-location",
+  );
+  const astronomySources = sources.filter(
+    (source) =>
+      source.kind === "astronomy-location",
+  );
 
   return (
     <div>
@@ -52,91 +60,206 @@ export function SourcesPanel({
         <h2 className="font-medium">
           Data sources
         </h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">
-          Widgets reference reusable sources and can
-          select them independently.
+        <p className="mt-1 text-sm leading-5 text-[var(--muted)]">
+          Sources are grouped by what they power. Widgets can reuse
+          the same source or select a different compatible source.
         </p>
       </header>
 
-      {weatherSource ? (
-        <div className="mt-5">
-          <WeatherSourceEditor
-            source={weatherSource}
-            onLocationChange={
-              onWeatherLocationChange
+      <div className="mt-5 space-y-4">
+        <SourceGroup
+          step="1"
+          label="Weather & radar"
+          detail="Location used by weather, wind, forecast, and radar widgets."
+        >
+          {weatherSource ? (
+            <>
+              <WeatherSourceEditor
+                source={weatherSource}
+                onLocationChange={
+                  onWeatherLocationChange
+                }
+              />
+
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
+                <SourceBadge
+                  label="Weather live"
+                  status={
+                    weatherStates[weatherSource.id]
+                      ?.status
+                  }
+                />
+                <SourceBadge
+                  label="Radar live"
+                  status={
+                    radarStates[weatherSource.id]
+                      ?.status
+                  }
+                />
+              </div>
+            </>
+          ) : (
+            <MissingSource>
+              No weather location is configured.
+            </MissingSource>
+          )}
+        </SourceGroup>
+
+        <SourceGroup
+          step="2"
+          label="Tides"
+          detail="NOAA stations used by tide widgets. You can keep more than one station."
+        >
+          <TideStationEditor
+            sources={sources}
+            widgets={widgets}
+            referenceSource={weatherSource}
+            tideStates={tideStates}
+            onAddSource={onAddTideSource}
+            onRemoveSource={onRemoveSource}
+          />
+        </SourceGroup>
+
+        <SourceGroup
+          step="3"
+          label="Marine"
+          detail="Coordinates used for waves, swell, and modeled water temperature."
+        >
+          <SourceList
+            sources={marineSources}
+            emptyMessage="No marine source is configured."
+            getStatus={(source) =>
+              marineStates[source.id]?.status
             }
           />
+        </SourceGroup>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <SourceBadge
-              label="Open-Meteo live"
-              status={
-                weatherStates[weatherSource.id]
-                  ?.status
-              }
-            />
-            <SourceBadge
-              label="Radar live"
-              status={
-                radarStates[weatherSource.id]
-                  ?.status
-              }
-            />
+        <SourceGroup
+          step="4"
+          label="Moon & sun"
+          detail="Location used for moon phase, illumination, sunrise, sunset, moonrise, and moonset."
+        >
+          <SourceList
+            sources={astronomySources}
+            emptyMessage="No astronomy source is configured."
+            getStatus={(source) =>
+              astronomyStates[source.id]?.status
+            }
+          />
+        </SourceGroup>
+      </div>
+
+      <p className="mt-5 rounded-xl bg-[var(--surface-muted)] p-3 text-xs leading-5 text-[var(--muted)]">
+        Radar imagery is provided by RainViewer over OpenStreetMap.
+        Marine forecasts are model guidance and are not suitable for
+        navigation.
+      </p>
+    </div>
+  );
+}
+
+function SourceGroup({
+  step,
+  label,
+  detail,
+  children,
+}: {
+  step: string;
+  label: string;
+  detail: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+      <header className="border-b border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-xs font-semibold text-[var(--accent)]">
+            {step}
+          </span>
+          <div className="min-w-0">
+            <h3 className="font-semibold">
+              {label}
+            </h3>
+            <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">
+              {detail}
+            </p>
           </div>
         </div>
-      ) : null}
+      </header>
+      <div className="p-4">
+        {children}
+      </div>
+    </section>
+  );
+}
 
-      <hr className="my-5 border-[var(--border)]" />
+function SourceList({
+  sources,
+  emptyMessage,
+  getStatus,
+}: {
+  sources: DashboardSource[];
+  emptyMessage: string;
+  getStatus: (
+    source: DashboardSource,
+  ) =>
+    | "idle"
+    | "loading"
+    | "success"
+    | "error"
+    | undefined;
+}) {
+  if (sources.length === 0) {
+    return (
+      <MissingSource>
+        {emptyMessage}
+      </MissingSource>
+    );
+  }
 
-      <TideStationEditor
-        sources={sources}
-        widgets={widgets}
-        referenceSource={weatherSource}
-        tideStates={tideStates}
-        onAddSource={onAddTideSource}
-        onRemoveSource={onRemoveSource}
-      />
-
-      <hr className="my-5 border-[var(--border)]" />
-
-      <div className="space-y-3">
-        {sources
-          .filter(
-            (source) =>
-              source.kind ===
-                "marine-location" ||
-              source.kind ===
-                "astronomy-location",
-          )
-          .map((source) => (
-            <article
-              key={source.id}
-              className="rounded-xl border border-[var(--border)] p-3"
-            >
-              <p className="font-medium">
+  return (
+    <div className="space-y-3">
+      {sources.map((source) => (
+        <article
+          key={source.id}
+          className="rounded-xl border border-[var(--border)] p-3"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-medium">
                 {source.label}
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 {sourceKindLabel(source.kind)}
               </p>
-              <SourceBadge
-                label={providerLabel(source.kind)}
-                status={sourceStatus({
-                  source,
-                  marineStates,
-                  astronomyStates,
-                })}
-              />
-            </article>
-          ))}
-      </div>
-
-      <p className="mt-4 text-xs leading-5 text-[var(--muted)]">
-        Radar imagery is provided by RainViewer over
-        OpenStreetMap. Marine forecasts are model
-        guidance and are not suitable for navigation.
-      </p>
+              {typeof source.latitude === "number" &&
+              typeof source.longitude === "number" ? (
+                <p className="mt-1 text-[11px] text-[var(--muted)]">
+                  {source.latitude.toFixed(4)},{" "}
+                  {source.longitude.toFixed(4)}
+                </p>
+              ) : null}
+            </div>
+            <SourceBadge
+              label={providerLabel(source.kind)}
+              status={getStatus(source)}
+            />
+          </div>
+        </article>
+      ))}
     </div>
+  );
+}
+
+function MissingSource({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <p className="rounded-xl border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">
+      {children}
+    </p>
   );
 }
 
@@ -163,7 +286,7 @@ function SourceBadge({
   return (
     <span
       className={[
-        "inline-block rounded-full px-2 py-1 text-xs",
+        "inline-block shrink-0 rounded-full px-2 py-1 text-xs",
         status === "error"
           ? "bg-red-50 text-red-700"
           : status === "success"
@@ -176,26 +299,6 @@ function SourceBadge({
   );
 }
 
-function sourceStatus({
-  source,
-  marineStates,
-  astronomyStates,
-}: {
-  source: DashboardSource;
-  marineStates: MarineSourceStateMap;
-  astronomyStates: AstronomySourceStateMap;
-}) {
-  switch (source.kind) {
-    case "marine-location":
-      return marineStates[source.id]?.status;
-    case "astronomy-location":
-      return astronomyStates[source.id]?.status;
-    case "weather-location":
-    case "tide-station":
-      return undefined;
-  }
-}
-
 function providerLabel(
   kind: DashboardSource["kind"],
 ): string {
@@ -203,10 +306,10 @@ function providerLabel(
     DashboardSource["kind"],
     string
   > = {
-    "weather-location": "Open-Meteo live",
-    "tide-station": "NOAA live",
+    "weather-location": "Open-Meteo",
+    "tide-station": "NOAA",
     "marine-location": "Marine live",
-    "astronomy-location": "Calculated locally",
+    "astronomy-location": "Calculated",
   };
 
   return labels[kind];
@@ -222,9 +325,10 @@ function sourceKindLabel(
     "weather-location":
       "Weather, wind, and radar location",
     "tide-station": "NOAA tide station",
-    "marine-location": "Marine coordinate",
+    "marine-location":
+      "Wave, swell, and water-temperature coordinate",
     "astronomy-location":
-      "Moon & sun location",
+      "Moon and sun location",
   };
 
   return labels[kind];

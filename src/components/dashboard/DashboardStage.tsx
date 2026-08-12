@@ -96,7 +96,7 @@ export function DashboardStage({
     mode === "view" &&
     layout.device === "mobile";
   const titleHeight = mobileViewer
-    ? 126
+    ? 148
     : layout.device === "mobile"
       ? 82
       : 104;
@@ -141,11 +141,18 @@ export function DashboardStage({
           }}
         >
           <header
-            className="flex flex-col justify-center"
+            className={[
+              "flex flex-col",
+              mobileViewer
+                ? "justify-end"
+                : "justify-center",
+            ].join(" ")}
             style={{
               height: titleHeight,
               paddingTop:
-                mobileViewer ? 48 : 0,
+                mobileViewer ? 64 : 0,
+              paddingBottom:
+                mobileViewer ? 18 : 0,
               paddingLeft:
                 mobileViewer
                   ? 16
