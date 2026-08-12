@@ -30,7 +30,6 @@ import {
 } from "@/lib/dashboard-storage";
 import { createMobileLayoutFromDesktop } from "@/lib/dashboard-layouts";
 import { getLayoutContentHeight } from "@/lib/layout-measurements";
-import { formatForecastDateLabel } from "@/lib/forecast-selection";
 
 const EMPTY_SOURCES: DashboardSource[] = [];
 
@@ -60,8 +59,6 @@ export function DashboardViewer() {
     useState(false);
   const [preferMobile, setPreferMobile] =
     useState(false);
-  const [selectedLayoutId, setSelectedLayoutId] =
-    useState<string>();
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
     useState<string>();
   const loadAttemptRef =
@@ -111,7 +108,6 @@ export function DashboardViewer() {
       void loadSharedDashboard(shareToken)
         .then(({ dashboard: saved }) => {
           setDashboard(saved);
-          setSelectedLayoutId(undefined);
           setSelectedForecastDateOverride(
             undefined,
           );
@@ -155,7 +151,6 @@ export function DashboardViewer() {
       void loadCloudDashboard(cloudId)
         .then((saved) => {
           setDashboard(saved);
-          setSelectedLayoutId(undefined);
           setSelectedForecastDateOverride(
             undefined,
           );
@@ -184,7 +179,6 @@ export function DashboardViewer() {
     }
 
     setDashboard(draft);
-    setSelectedLayoutId(undefined);
     setStatus("ready");
   }, [authLoading, user]);
 
@@ -285,10 +279,7 @@ export function DashboardViewer() {
     : undefined;
 
   const activeLayout =
-    viewerLayouts.find(
-      (layout) =>
-        layout.id === selectedLayoutId,
-    ) ?? automaticLayout;
+    automaticLayout;
 
   function updateWidgetSettings(
     widgetId: string,
@@ -377,87 +368,31 @@ export function DashboardViewer() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--surface-muted)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-5">
-          <div className="min-w-0">
-            <Link
-              href="/"
-              className="text-xs font-medium text-[var(--accent)]"
-            >
-              Fishing Forecast
-            </Link>
-            <h1 className="truncate text-base font-semibold sm:text-lg">
-              {dashboard.name}
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <label className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm">
-              <span className="hidden text-[var(--muted)] sm:inline">
-                Forecast
-              </span>
-              <select
-                aria-label="Forecast date"
-                value={selectedForecastDate}
-                onChange={(event) =>
-                  setSelectedForecastDateOverride(
-                    event.target.value,
-                  )
-                }
-                className="bg-transparent font-medium"
-              >
-                {availableForecastDates.map(
-                  (date) => (
-                    <option
-                      key={date}
-                      value={date}
-                    >
-                      {formatForecastDateLabel({
-                        date,
-                        todayDate,
-                      })}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-
-            {viewerLayouts.length > 1
-              ? viewerLayouts.map((layout) => (
-                  <button
-                    key={layout.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedLayoutId(
-                        layout.id,
-                      )
-                    }
-                    className={[
-                      "rounded-xl px-3 py-2 text-sm",
-                      layout.id === activeLayout.id
-                        ? "bg-[var(--selection)] font-medium text-[var(--accent)]"
-                        : "text-[var(--muted)] hover:bg-[var(--surface-muted)]",
-                    ].join(" ")}
-                  >
-                    {layout.name}
-                  </button>
-                ))
-              : null}
-
-            <Link
-              href={editHref}
-              className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
-            >
-              Edit
-            </Link>
-          </div>
-        </div>
-      </header>
+    <main
+      className="dashboard-theme min-h-screen text-[var(--foreground)]"
+      data-theme={dashboard.theme}
+      style={{
+        backgroundColor:
+          "var(--dashboard-background, var(--background))",
+        backgroundImage:
+          "var(--dashboard-pattern, none)",
+        backgroundSize:
+          "var(--dashboard-pattern-size, auto)",
+        backgroundPosition: "center",
+      }}
+    >
+      <Link
+        href={editHref}
+        className="fixed right-3 top-3 z-50 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
+      >
+        Edit
+      </Link>
 
       <ResponsiveDashboardCanvas
         dashboard={dashboard}
         layout={activeLayout}
+        title={dashboard.name}
+        subtitle={primaryWeatherSource?.label}
         weatherStates={weatherStates}
         tideStates={tideStates}
         marineStates={marineStates}
@@ -478,6 +413,8 @@ export function DashboardViewer() {
 function ResponsiveDashboardCanvas({
   dashboard,
   layout,
+  title,
+  subtitle,
   weatherStates,
   tideStates,
   marineStates,
@@ -489,6 +426,8 @@ function ResponsiveDashboardCanvas({
 }: {
   dashboard: FishingDashboard;
   layout: DashboardLayout;
+  title: string;
+  subtitle?: string;
   weatherStates: ReturnType<
     typeof useWeatherSources
   >;
@@ -542,44 +481,74 @@ function ResponsiveDashboardCanvas({
 
   const contentHeight =
     getLayoutContentHeight(layout);
-  const horizontalPadding =
-    layout.device === "mobile" ? 20 : 48;
+  const titleHeight =
+    layout.device === "mobile" ? 82 : 104;
+  const totalHeight =
+    titleHeight + contentHeight;
   const scale = Math.min(
     1,
     Math.max(
       0.2,
-      (stageWidth - horizontalPadding) /
-        layout.viewport.width,
+      stageWidth / layout.viewport.width,
     ),
   );
   const displayedWidth = Math.round(
     layout.viewport.width * scale,
   );
   const displayedHeight = Math.round(
-    contentHeight * scale,
+    totalHeight * scale,
   );
 
   return (
     <div
       ref={stageRef}
-      className="min-h-[calc(100vh-70px)] overflow-x-auto py-3 sm:py-6"
+      className="min-h-screen overflow-x-auto"
     >
       <div
-        className="mx-auto shrink-0 overflow-hidden border border-[var(--border)] bg-white shadow-sm"
+        className="mx-auto shrink-0 overflow-hidden"
         style={{
           width: displayedWidth,
           height: displayedHeight,
         }}
       >
         <div
-          className="origin-top-left"
+          className="dashboard-theme origin-top-left text-[var(--foreground)]"
+          data-theme={dashboard.theme}
           style={{
             width: layout.viewport.width,
-            height: contentHeight,
+            height: totalHeight,
             transform: `scale(${scale})`,
             transformOrigin: "top left",
+            backgroundColor:
+              "var(--dashboard-background, var(--background))",
           }}
         >
+          <header
+            className="flex flex-col justify-center"
+            style={{
+              height: titleHeight,
+              paddingInline:
+                layout.device === "mobile"
+                  ? 16
+                  : 28,
+            }}
+          >
+            <h1
+              className={
+                layout.device === "mobile"
+                  ? "text-2xl font-semibold"
+                  : "text-3xl font-semibold"
+              }
+            >
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                {subtitle}
+              </p>
+            ) : null}
+          </header>
+
           <DashboardCanvas
             layout={layout}
             theme={dashboard.theme}
