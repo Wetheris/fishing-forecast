@@ -92,8 +92,14 @@ export function DashboardStage({
 
   const contentHeight =
     getLayoutContentHeight(layout);
-  const titleHeight =
-    layout.device === "mobile" ? 82 : 104;
+  const mobileViewer =
+    mode === "view" &&
+    layout.device === "mobile";
+  const titleHeight = mobileViewer
+    ? 126
+    : layout.device === "mobile"
+      ? 82
+      : 104;
   const totalHeight =
     titleHeight + contentHeight;
   const scale = Math.min(
@@ -109,19 +115,6 @@ export function DashboardStage({
   const displayedHeight = Math.round(
     totalHeight * scale,
   );
-
-  const basePadding =
-    layout.device === "mobile"
-      ? 16
-      : 28;
-  const viewLeftPadding =
-    layout.device === "mobile"
-      ? 68
-      : 76;
-  const viewRightPadding =
-    layout.device === "mobile"
-      ? 116
-      : 132;
 
   return (
     <div
@@ -148,35 +141,43 @@ export function DashboardStage({
           }}
         >
           <header
-            className="flex items-center"
+            className="flex flex-col justify-center"
             style={{
               height: titleHeight,
+              paddingTop:
+                mobileViewer ? 48 : 0,
               paddingLeft:
-                mode === "view"
-                  ? viewLeftPadding
-                  : basePadding,
+                mobileViewer
+                  ? 16
+                  : mode === "view"
+                    ? 72
+                    : layout.device === "mobile"
+                      ? 16
+                      : 28,
               paddingRight:
-                mode === "view"
-                  ? viewRightPadding
-                  : basePadding,
+                mobileViewer
+                  ? 16
+                  : mode === "view"
+                    ? 124
+                    : layout.device === "mobile"
+                      ? 16
+                      : 28,
             }}
           >
-            <div className="min-w-0">
-              <h1
-                className={
-                  layout.device === "mobile"
-                    ? "truncate text-2xl font-semibold"
-                    : "truncate text-3xl font-semibold"
-                }
-              >
-                {dashboard.name}
-              </h1>
-              {subtitle ? (
-                <p className="mt-1 truncate text-sm text-[var(--muted)]">
-                  {subtitle}
-                </p>
-              ) : null}
-            </div>
+            <h1
+              className={
+                layout.device === "mobile"
+                  ? "truncate text-2xl font-semibold"
+                  : "truncate text-3xl font-semibold"
+              }
+            >
+              {dashboard.name}
+            </h1>
+            {subtitle ? (
+              <p className="mt-1 truncate text-sm text-[var(--muted)]">
+                {subtitle}
+              </p>
+            ) : null}
           </header>
 
           <DashboardCanvas

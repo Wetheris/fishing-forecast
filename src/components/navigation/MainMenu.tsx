@@ -141,6 +141,7 @@ export function MainMenu() {
         data-path={pathname}
       >
         <button
+          data-main-menu-button
           type="button"
           aria-label={
             open
@@ -351,8 +352,13 @@ export function MainMenu() {
       />
 
       <style>{`
+        body:has([data-builder-tools-open="true"])
+          [data-main-menu-button] {
+          display: none;
+        }
+
         body:has([data-main-menu-root][data-path="/build"])
-          main > header {
+          [data-builder-tools-open="false"] > header {
           padding-left: 4.25rem;
         }
 

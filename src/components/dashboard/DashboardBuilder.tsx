@@ -1229,14 +1229,17 @@ export function DashboardBuilder() {
   }
 
   return (
-    <main className="flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--surface-muted)]">
+    <main
+      data-builder-tools-open={editorOpen ? "true" : "false"}
+      className="flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--surface-muted)]"
+    >
       <header className="relative z-50 flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-white px-3 py-2 sm:px-4">
         <button
           type="button"
           onClick={() =>
             setEditorOpen((current) => !current)
           }
-          className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+          className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
         >
           {editorOpen ? "Hide tools" : "Tools"}
         </button>
@@ -1245,7 +1248,7 @@ export function DashboardBuilder() {
           <p className="truncate text-sm font-medium">
             {dashboard.name}
           </p>
-          <p className="text-xs text-[var(--muted)]">
+          <p className="hidden truncate text-xs text-[var(--muted)] sm:block">
             Editing {activeLayout.device === "mobile" ? "mobile" : "desktop"} layout
           </p>
         </div>
@@ -1254,7 +1257,7 @@ export function DashboardBuilder() {
           type="button"
           onClick={() => void handleDone()}
           disabled={finishing || saveState === "saving"}
-          className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="shrink-0 rounded-xl bg-[var(--accent)] px-3.5 py-2 text-sm font-medium text-white disabled:opacity-60 sm:px-4"
         >
           {finishing || saveState === "saving"
             ? "Saving…"
