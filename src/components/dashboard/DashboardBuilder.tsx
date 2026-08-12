@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   DashboardLayout,
   DashboardSource,
@@ -34,15 +37,11 @@ import {
   normalizePlacementsForLayout,
 } from "@/lib/dashboard-layouts";
 import type { WidgetDefinition } from "@/widgets/types";
-import { formatForecastDateLabel } from "@/lib/forecast-selection";
 import {
   BuilderToolbar,
   type BuilderPanel,
 } from "@/components/builder/BuilderToolbar";
-import {
-  BuilderPreview,
-  type PreviewZoom,
-} from "@/components/builder/BuilderPreview";
+import { DashboardStage } from "@/components/dashboard/DashboardStage";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { SaveOptionsDialog } from "@/components/auth/SaveOptionsDialog";
@@ -59,21 +58,24 @@ import {
 } from "@/lib/dashboard-storage";
 
 export function DashboardBuilder() {
+  const initialDashboard =
+    createInitialDashboard();
   const [dashboard, setDashboard] =
-    useState<FishingDashboard>(() =>
-      createInitialDashboard(),
+    useState<FishingDashboard>(
+      initialDashboard,
     );
   const [activeLayoutId, setActiveLayoutId] =
-    useState(dashboard.layouts[0].id);
+    useState(initialDashboard.layouts[0].id);
   const [panel, setPanel] =
     useState<BuilderPanel>("layouts");
   const [selectedWidgetId, setSelectedWidgetId] =
     useState<string>();
-  const [mode, setMode] =
-    useState<"edit" | "view">("edit");
-  const [zoom, setZoom] =
-    useState<PreviewZoom>("fit");
-  const [showGrid, setShowGrid] = useState(true);
+  const [showGrid, setShowGrid] =
+    useState(false);
+  const [editorOpen, setEditorOpen] =
+    useState(false);
+  const [finishing, setFinishing] =
+    useState(false);
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
     useState<string>();
   const { user, loading: authLoading } =
@@ -112,18 +114,14 @@ export function DashboardBuilder() {
     useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    const mobile = isMobileViewport();
+    setEditorOpen(!mobile);
 
-    const params =
-      new URLSearchParams(
-        window.location.search,
-      );
-    const cloudId =
-      params.get("dashboard");
-    const shareToken =
-      params.get("share");
+    const params = new URLSearchParams(
+      window.location.search,
+    );
+    const cloudId = params.get("dashboard");
+    const shareToken = params.get("share");
 
     if (shareToken) {
       setSharedDashboardToken(
@@ -132,21 +130,23 @@ export function DashboardBuilder() {
     }
 
     if (!cloudId && !shareToken) {
-      const localDraft =
-        loadLocalDashboardDraft();
-
-      if (localDraft) {
-        setDashboard(localDraft);
-        setActiveLayoutId(
-          localDraft.layouts[0]?.id ??
-            dashboard.layouts[0].id,
+      const restored =
+        loadLocalDashboardDraft() ??
+        initialDashboard;
+      const prepared =
+        prepareDashboardForViewport(
+          restored,
         );
-      }
+
+      setDashboard(prepared.dashboard);
+      setActiveLayoutId(
+        prepared.layoutId,
+      );
     }
 
     setDraftReady(true);
-    // The initial dashboard is intentionally used
-    // only as a fallback for the first local restore.
+    // initialDashboard is intentionally a first-render
+    // fallback only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,10 +163,7 @@ export function DashboardBuilder() {
   }, [dashboard, draftReady, saveState]);
 
   useEffect(() => {
-    if (
-      !draftReady ||
-      typeof window === "undefined"
-    ) {
+    if (!draftReady) {
       return;
     }
 
@@ -196,10 +193,16 @@ export function DashboardBuilder() {
           dashboard: savedDashboard,
           expiresAt,
         }) => {
-          setDashboard(savedDashboard);
+          const prepared =
+            prepareDashboardForViewport(
+              savedDashboard,
+            );
+
+          setDashboard(
+            prepared.dashboard,
+          );
           setActiveLayoutId(
-            savedDashboard.layouts[0]?.id ??
-              savedDashboard.id,
+            prepared.layoutId,
           );
           setSharedDashboardToken(
             shareToken,
@@ -232,8 +235,7 @@ export function DashboardBuilder() {
   useEffect(() => {
     if (
       authLoading ||
-      !user ||
-      typeof window === "undefined"
+      !user
     ) {
       return;
     }
@@ -251,36 +253,46 @@ export function DashboardBuilder() {
       return;
     }
 
-    const ignoredCloudId = cloudId;
-
     if (
-      !ignoredCloudId ||
+      !cloudId ||
       cloudLoadAttempted.current ===
-        ignoredCloudId
+        cloudId
     ) {
       return;
     }
 
     cloudLoadAttempted.current =
-      ignoredCloudId;
+      cloudId;
     setSaveState("saving");
-    setSaveMessage("Loading saved dashboard…");
+    setSaveMessage(
+      "Loading saved dashboard…",
+    );
 
     void loadCloudDashboard(
-      ignoredCloudId,
+      cloudId,
     )
       .then((savedDashboard) => {
-        setDashboard(savedDashboard);
+        const prepared =
+          prepareDashboardForViewport(
+            savedDashboard,
+          );
+
+        setDashboard(
+          prepared.dashboard,
+        );
         setActiveLayoutId(
-          savedDashboard.layouts[0]?.id ??
-            savedDashboard.id,
+          prepared.layoutId,
         );
         setCloudDashboardId(
-          ignoredCloudId,
+          cloudId,
         );
-        setSelectedWidgetId(undefined);
+        setSelectedWidgetId(
+          undefined,
+        );
         setSaveState("saved");
-        setSaveMessage("Loaded from your account.");
+        setSaveMessage(
+          "Loaded from your account.",
+        );
       })
       .catch((caught: unknown) => {
         setSaveState("error");
@@ -303,8 +315,6 @@ export function DashboardBuilder() {
     }
 
     void saveCurrentDashboard(user);
-    // saveCurrentDashboard intentionally reads
-    // the latest dashboard state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, draftReady, user]);
 
@@ -321,19 +331,28 @@ export function DashboardBuilder() {
   const primaryWeatherSource =
     dashboard.sources.find(
       (source) =>
-        source.kind === "weather-location",
+        source.kind ===
+        "weather-location",
     );
-  const primaryWeatherState = primaryWeatherSource
-    ? weatherStates[primaryWeatherSource.id]
-    : undefined;
+  const primaryWeatherState =
+    primaryWeatherSource
+      ? weatherStates[
+          primaryWeatherSource.id
+        ]
+      : undefined;
   const primaryWeatherData =
-    primaryWeatherState?.status === "success"
+    primaryWeatherState?.status ===
+    "success"
       ? primaryWeatherState.data
       : null;
   const fallbackTimezone =
-    primaryWeatherSource?.timezone ?? "UTC";
+    primaryWeatherSource?.timezone ??
+    "UTC";
   const todayDate =
-    primaryWeatherData?.current.time.slice(0, 10) ??
+    primaryWeatherData?.current.time.slice(
+      0,
+      10,
+    ) ??
     dateKeyInTimezone(
       new Date(),
       fallbackTimezone,
@@ -353,7 +372,8 @@ export function DashboardBuilder() {
       ? selectedForecastDateOverride
       : todayDate;
   const forecastContext: ForecastContext = {
-    selectedDate: selectedForecastDate,
+    selectedDate:
+      selectedForecastDate,
     todayDate,
     timezone:
       primaryWeatherData?.timezone ??
@@ -361,30 +381,39 @@ export function DashboardBuilder() {
       "UTC",
   };
 
-  const astronomyStates = useAstronomySources(
-    dashboard.sources,
-    selectedForecastDate,
-  );
-  const radarStates = useRadarSources(
-    dashboard.sources,
-  );
+  const astronomyStates =
+    useAstronomySources(
+      dashboard.sources,
+      selectedForecastDate,
+    );
+  const radarStates =
+    useRadarSources(
+      dashboard.sources,
+    );
 
   const activeLayout =
     dashboard.layouts.find(
-      (layout) => layout.id === activeLayoutId,
+      (layout) =>
+        layout.id === activeLayoutId,
     ) ?? dashboard.layouts[0];
 
-  const selectedWidget = dashboard.widgets.find(
-    (widget) => widget.id === selectedWidgetId,
-  );
+  const selectedWidget =
+    dashboard.widgets.find(
+      (widget) =>
+        widget.id ===
+        selectedWidgetId,
+    );
 
   const selectedPlacement =
     activeLayout?.placements.find(
       (placement) =>
-        placement.widgetId === selectedWidgetId,
+        placement.widgetId ===
+        selectedWidgetId,
     );
 
-  function updateDashboardName(name: string) {
+  function updateDashboardName(
+    name: string,
+  ) {
     setDashboard((current) => ({
       ...current,
       name,
@@ -406,24 +435,31 @@ export function DashboardBuilder() {
   ) {
     setDashboard((current) => ({
       ...current,
-      widgets: current.widgets.map((widget) =>
-        widget.id === widgetId
-          ? {
-              ...widget,
-              settings: {
-                ...widget.settings,
-                ...settings,
-              },
-            }
-          : widget,
+      widgets: current.widgets.map(
+        (widget) =>
+          widget.id === widgetId
+            ? {
+                ...widget,
+                settings: {
+                  ...widget.settings,
+                  ...settings,
+                },
+              }
+            : widget,
       ),
     }));
   }
 
-  function selectWidget(widgetId: string) {
-    setSelectedWidgetId(widgetId || undefined);
+  function selectWidget(
+    widgetId: string,
+  ) {
+    setSelectedWidgetId(
+      widgetId || undefined,
+    );
+
     if (widgetId) {
       setPanel("selected");
+      setEditorOpen(true);
     }
   }
 
@@ -432,12 +468,18 @@ export function DashboardBuilder() {
       layout: DashboardLayout,
     ) => DashboardLayout,
   ) {
+    if (!activeLayout) {
+      return;
+    }
+
     setDashboard((current) => ({
       ...current,
-      layouts: current.layouts.map((layout) =>
-        layout.id === activeLayout.id
-          ? updater(layout)
-          : layout,
+      layouts: current.layouts.map(
+        (layout) =>
+          layout.id ===
+          activeLayout.id
+            ? updater(layout)
+            : layout,
       ),
     }));
   }
@@ -459,32 +501,46 @@ export function DashboardBuilder() {
         ...layout,
         ...updates,
       };
+
       return {
         ...next,
-        placements: normalizePlacementsForLayout(
-          next,
-          layout.placements,
-        ),
+        placements:
+          normalizePlacementsForLayout(
+            next,
+            layout.placements,
+          ),
       };
     });
   }
 
-  function applyLayoutPreset(presetKey: string) {
-    const preset = layoutPresets.find(
-      (item) => item.key === presetKey,
-    );
+  function applyLayoutPreset(
+    presetKey: string,
+  ) {
+    const preset =
+      layoutPresets.find(
+        (item) =>
+          item.key === presetKey,
+      );
+
     if (!preset) {
       return;
     }
+
     updateActiveLayout((layout) =>
-      applyPreset(layout, preset),
+      applyPreset(
+        layout,
+        preset,
+      ),
     );
   }
 
-  function createLayout(device: LayoutDevice) {
+  function createLayout(
+    device: LayoutDevice,
+  ) {
     if (
       dashboard.layouts.some(
-        (layout) => layout.device === device,
+        (layout) =>
+          layout.device === device,
       )
     ) {
       return;
@@ -496,58 +552,91 @@ export function DashboardBuilder() {
             dashboard.widgets,
           )
         : createLayoutFromPreset(
-            getRecommendedPreset(device),
+            getRecommendedPreset(
+              device,
+            ),
             dashboard.widgets,
           );
 
     setDashboard((current) => ({
       ...current,
-      layouts: [...current.layouts, layout],
+      layouts: [
+        ...current.layouts,
+        layout,
+      ],
     }));
     setActiveLayoutId(layout.id);
     setPanel("layouts");
-    setZoom("fit");
   }
 
-  function deleteLayout(layoutId: string) {
-    const remaining = dashboard.layouts.filter(
-      (layout) => layout.id !== layoutId,
-    );
+  function deleteLayout(
+    layoutId: string,
+  ) {
+    const remaining =
+      dashboard.layouts.filter(
+        (layout) =>
+          layout.id !== layoutId,
+      );
+
     if (remaining.length === 0) {
       return;
     }
 
     setDashboard((current) => ({
       ...current,
-      layouts: current.layouts.filter(
-        (layout) => layout.id !== layoutId,
-      ),
+      layouts:
+        current.layouts.filter(
+          (layout) =>
+            layout.id !==
+            layoutId,
+        ),
     }));
-    setActiveLayoutId(remaining[0].id);
-    setSelectedWidgetId(undefined);
+    setActiveLayoutId(
+      remaining[0].id,
+    );
+    setSelectedWidgetId(
+      undefined,
+    );
   }
 
   function resetLayout() {
     updateActiveLayout((layout) =>
-      autoArrangeLayout(layout, dashboard.widgets),
+      autoArrangeLayout(
+        layout,
+        dashboard.widgets,
+      ),
     );
   }
 
-  function addWidget(definition: WidgetDefinition) {
-    const widget = createWidgetInstance(
-      definition.key,
-      dashboard.widgets.length,
-    );
+  function addWidget(
+    definition: WidgetDefinition,
+  ) {
+    const widget =
+      createWidgetInstance(
+        definition.key,
+        dashboard.widgets.length,
+      );
 
     setDashboard((current) => ({
       ...current,
-      widgets: [...current.widgets, widget],
-      layouts: current.layouts.map((layout) =>
-        addWidgetToLayout(layout, widget),
-      ),
+      widgets: [
+        ...current.widgets,
+        widget,
+      ],
+      layouts:
+        current.layouts.map(
+          (layout) =>
+            addWidgetToLayout(
+              layout,
+              widget,
+            ),
+        ),
     }));
-    setSelectedWidgetId(widget.id);
+    setSelectedWidgetId(
+      widget.id,
+    );
     setPanel("selected");
+    setEditorOpen(true);
   }
 
   function updateSelectedWidget(
@@ -559,10 +648,15 @@ export function DashboardBuilder() {
 
     setDashboard((current) => ({
       ...current,
-      widgets: current.widgets.map((widget) =>
-        widget.id === selectedWidgetId
-          ? { ...widget, ...updates }
-          : widget,
+      widgets: current.widgets.map(
+        (widget) =>
+          widget.id ===
+          selectedWidgetId
+            ? {
+                ...widget,
+                ...updates,
+              }
+            : widget,
       ),
     }));
   }
@@ -574,15 +668,22 @@ export function DashboardBuilder() {
       return;
     }
 
-    updateActiveLayout((layout) => ({
-      ...layout,
-      placements: layout.placements.map(
-        (placement) =>
-          placement.widgetId === selectedWidgetId
-            ? { ...placement, ...updates }
-            : placement,
-      ),
-    }));
+    updateActiveLayout(
+      (layout) => ({
+        ...layout,
+        placements:
+          layout.placements.map(
+            (placement) =>
+              placement.widgetId ===
+              selectedWidgetId
+                ? {
+                    ...placement,
+                    ...updates,
+                  }
+                : placement,
+          ),
+      }),
+    );
   }
 
   function duplicateSelectedWidget() {
@@ -593,18 +694,31 @@ export function DashboardBuilder() {
     const duplicate: WidgetInstance = {
       ...selectedWidget,
       id: `${selectedWidget.widgetKey}-${Date.now()}`,
-      title: `${selectedWidget.title} Copy`,
-      settings: { ...selectedWidget.settings },
+      title:
+        `${selectedWidget.title} Copy`,
+      settings: {
+        ...selectedWidget.settings,
+      },
     };
 
     setDashboard((current) => ({
       ...current,
-      widgets: [...current.widgets, duplicate],
-      layouts: current.layouts.map((layout) =>
-        addWidgetToLayout(layout, duplicate),
-      ),
+      widgets: [
+        ...current.widgets,
+        duplicate,
+      ],
+      layouts:
+        current.layouts.map(
+          (layout) =>
+            addWidgetToLayout(
+              layout,
+              duplicate,
+            ),
+        ),
     }));
-    setSelectedWidgetId(duplicate.id);
+    setSelectedWidgetId(
+      duplicate.id,
+    );
   }
 
   function removeSelectedWidget() {
@@ -614,18 +728,28 @@ export function DashboardBuilder() {
 
     setDashboard((current) => ({
       ...current,
-      widgets: current.widgets.filter(
-        (widget) => widget.id !== selectedWidgetId,
-      ),
-      layouts: current.layouts.map((layout) => ({
-        ...layout,
-        placements: layout.placements.filter(
-          (placement) =>
-            placement.widgetId !== selectedWidgetId,
+      widgets:
+        current.widgets.filter(
+          (widget) =>
+            widget.id !==
+            selectedWidgetId,
         ),
-      })),
+      layouts:
+        current.layouts.map(
+          (layout) => ({
+            ...layout,
+            placements:
+              layout.placements.filter(
+                (placement) =>
+                  placement.widgetId !==
+                  selectedWidgetId,
+              ),
+          }),
+        ),
     }));
-    setSelectedWidgetId(undefined);
+    setSelectedWidgetId(
+      undefined,
+    );
     setPanel("widgets");
   }
 
@@ -637,8 +761,10 @@ export function DashboardBuilder() {
       const alreadyExists =
         current.sources.some(
           (source) =>
-            source.kind === "tide-station" &&
-            source.externalId === station.id,
+            source.kind ===
+              "tide-station" &&
+            source.externalId ===
+              station.id,
         );
 
       if (alreadyExists) {
@@ -655,10 +781,13 @@ export function DashboardBuilder() {
       const source: DashboardSource = {
         id: `tide-${station.id}-${createId()}`,
         kind: "tide-station",
-        providerKey: "noaa-coops",
+        providerKey:
+          "noaa-coops",
         label: station.label,
-        latitude: station.latitude,
-        longitude: station.longitude,
+        latitude:
+          station.latitude,
+        longitude:
+          station.longitude,
         timezone:
           weatherSource?.timezone ??
           "America/New_York",
@@ -668,7 +797,8 @@ export function DashboardBuilder() {
           units: "english",
           distanceMiles:
             station.distanceMiles,
-          tideType: station.tideType,
+          tideType:
+            station.tideType,
           supportsDetailedPredictions:
             station.supportsDetailedPredictions,
         },
@@ -684,12 +814,16 @@ export function DashboardBuilder() {
     });
   }
 
-  function removeSource(sourceId: string) {
+  function removeSource(
+    sourceId: string,
+  ) {
     setDashboard((current) => {
-      const isUsed = current.widgets.some(
-        (widget) =>
-          widget.sourceId === sourceId,
-      );
+      const isUsed =
+        current.widgets.some(
+          (widget) =>
+            widget.sourceId ===
+            sourceId,
+        );
 
       if (isUsed) {
         return current;
@@ -697,10 +831,12 @@ export function DashboardBuilder() {
 
       return {
         ...current,
-        sources: current.sources.filter(
-          (source) =>
-            source.id !== sourceId,
-        ),
+        sources:
+          current.sources.filter(
+            (source) =>
+              source.id !==
+              sourceId,
+          ),
       };
     });
   }
@@ -708,69 +844,84 @@ export function DashboardBuilder() {
   function updateWeatherLocation(
     location: WeatherLocationSelection,
   ) {
-    setSelectedForecastDateOverride(undefined);
+    setSelectedForecastDateOverride(
+      undefined,
+    );
     setDashboard((current) => ({
       ...current,
-      sources: current.sources.map((source) =>
-        source.kind === "weather-location"
-          ? {
-              ...source,
-              label: location.label,
-              latitude: location.latitude,
-              longitude: location.longitude,
-              timezone: location.timezone,
-            }
-          : source,
-      ),
+      sources:
+        current.sources.map(
+          (source) =>
+            source.kind ===
+            "weather-location"
+              ? {
+                  ...source,
+                  label:
+                    location.label,
+                  latitude:
+                    location.latitude,
+                  longitude:
+                    location.longitude,
+                  timezone:
+                    location.timezone,
+                }
+              : source,
+        ),
     }));
   }
 
-
   async function saveCurrentDashboard(
     authenticatedUser = user,
-  ) {
+  ): Promise<string | undefined> {
     if (!authenticatedUser) {
       setPendingCloudSave(true);
       setAuthOpen(true);
-      return;
+      return undefined;
     }
 
     setSaveState("saving");
-    setSaveMessage("Saving dashboard…");
+    setSaveMessage(
+      "Saving dashboard…",
+    );
 
     try {
       const saved =
         await saveCloudDashboard({
           dashboard,
-          user: authenticatedUser,
-          cloudId: cloudDashboardId,
+          user:
+            authenticatedUser,
+          cloudId:
+            cloudDashboardId,
         });
 
-      setCloudDashboardId(saved.id);
-      setPendingCloudSave(false);
+      setCloudDashboardId(
+        saved.id,
+      );
+      setPendingCloudSave(
+        false,
+      );
       setSaveState("saved");
-      setSaveMessage("Saved to your account.");
+      setSaveMessage(
+        "Saved to your account.",
+      );
 
-      if (typeof window !== "undefined") {
-        const url = new URL(
-          window.location.href,
-        );
-        url.searchParams.set(
-          "dashboard",
-          saved.id,
-        );
-        url.searchParams.delete(
-          "share",
-        );
-        setSharedDashboardToken(
-          undefined,
-        );
-        window.history.replaceState(
-          {},
-          "",
-          url,
-        );
-      }
+      const url = new URL(
+        window.location.href,
+      );
+      url.searchParams.set(
+        "dashboard",
+        saved.id,
+      );
+      url.searchParams.delete(
+        "share",
+      );
+      window.history.replaceState(
+        {},
+        "",
+        url,
+      );
+
+      return saved.id;
     } catch (caught) {
       setSaveState("error");
       setSaveMessage(
@@ -778,18 +929,15 @@ export function DashboardBuilder() {
           ? caught.message
           : "Unable to save dashboard.",
       );
+      return undefined;
     }
   }
 
   function handleSave() {
-    /*
-     * Signed-in users save their account dashboard with the
-     * primary Save button. Public URL publishing remains a
-     * separate action so the cloud copy cannot accidentally
-     * diverge from the user's account save flow.
-     */
     if (user) {
-      void saveCurrentDashboard(user);
+      void saveCurrentDashboard(
+        user,
+      );
       return;
     }
 
@@ -806,8 +954,12 @@ export function DashboardBuilder() {
     }
 
     setSharedUrl(undefined);
-    setSharedSaveError(undefined);
-    setSaveOptionsMode("guest");
+    setSharedSaveError(
+      undefined,
+    );
+    setSaveOptionsMode(
+      "guest",
+    );
   }
 
   function handleAccountSaveFromOptions() {
@@ -842,13 +994,17 @@ export function DashboardBuilder() {
     }
 
     setSharedUrl(undefined);
-    setSharedSaveError(undefined);
-    setSaveOptionsMode("url-only");
+    setSharedSaveError(
+      undefined,
+    );
+    setSaveOptionsMode(
+      "url-only",
+    );
   }
 
   async function handleSaveToUrl(
     shareTokenOverride?: string,
-  ) {
+  ): Promise<string | undefined> {
     const existingShareToken =
       shareTokenOverride ??
       getCurrentShareToken(
@@ -856,7 +1012,9 @@ export function DashboardBuilder() {
       );
 
     setSavingSharedUrl(true);
-    setSharedSaveError(undefined);
+    setSharedSaveError(
+      undefined,
+    );
     setSaveState("saving");
     setSaveMessage(
       existingShareToken
@@ -865,12 +1023,6 @@ export function DashboardBuilder() {
     );
 
     try {
-      /*
-       * An existing shared URL is update-only. The edit
-       * token is intentionally browser-local; if it is gone,
-       * do not let saveSharedDashboard silently mint a
-       * replacement URL.
-       */
       if (
         existingShareToken &&
         !hasSharedEditToken(
@@ -898,8 +1050,11 @@ export function DashboardBuilder() {
       }
 
       const editorUrl =
-        new URL(window.location.href);
-      editorUrl.pathname = "/build";
+        new URL(
+          window.location.href,
+        );
+      editorUrl.pathname =
+        "/build";
       editorUrl.searchParams.delete(
         "dashboard",
       );
@@ -908,7 +1063,8 @@ export function DashboardBuilder() {
         saved.shareToken,
       );
 
-      const viewUrl = new URL(editorUrl);
+      const viewUrl =
+        new URL(editorUrl);
       viewUrl.pathname = "/view";
       const shareUrl =
         viewUrl.toString();
@@ -916,7 +1072,9 @@ export function DashboardBuilder() {
       setSharedDashboardToken(
         saved.shareToken,
       );
-      setSharedUrl(shareUrl);
+      setSharedUrl(
+        shareUrl,
+      );
       setSharedExpiresAt(
         saved.expiresAt,
       );
@@ -927,6 +1085,7 @@ export function DashboardBuilder() {
           saved.shareToken,
         );
       }
+
       setSaveState("saved");
       setSaveMessage(
         saved.updatedExisting
@@ -934,11 +1093,6 @@ export function DashboardBuilder() {
           : "Saved to an anonymous URL.",
       );
 
-      /*
-       * For guests, make the anonymous URL the current editor URL so
-       * refresh/reopen keeps the saved dashboard. Signed-in users keep
-       * their account-dashboard URL and receive a separate share link.
-       */
       if (!user) {
         window.history.replaceState(
           {},
@@ -946,17 +1100,119 @@ export function DashboardBuilder() {
           editorUrl,
         );
       }
+
+      return saved.shareToken;
     } catch (caught) {
       const message =
         caught instanceof Error
           ? caught.message
           : "Unable to save this dashboard to a URL.";
 
-      setSharedSaveError(message);
+      setSharedSaveError(
+        message,
+      );
       setSaveState("error");
-      setSaveMessage(message);
+      setSaveMessage(
+        message,
+      );
+      return undefined;
     } finally {
-      setSavingSharedUrl(false);
+      setSavingSharedUrl(
+        false,
+      );
+    }
+  }
+
+  async function handleDone() {
+    if (finishing) {
+      return;
+    }
+
+    setFinishing(true);
+
+    try {
+      const routeShareToken =
+        getShareTokenFromLocation();
+
+      if (routeShareToken) {
+        const savedShareToken =
+          await handleSaveToUrl(
+            routeShareToken,
+          );
+
+        if (!savedShareToken) {
+          return;
+        }
+
+        window.location.assign(
+          `/view?share=${encodeURIComponent(
+            savedShareToken,
+          )}`,
+        );
+        return;
+      }
+
+      if (
+        user &&
+        cloudDashboardId
+      ) {
+        const savedCloudId =
+          await saveCurrentDashboard(
+            user,
+          );
+
+        if (!savedCloudId) {
+          return;
+        }
+
+        const publicShareToken =
+          sharedDashboardToken ??
+          loadRememberedCloudShareToken(
+            savedCloudId,
+          );
+
+        if (publicShareToken) {
+          const updatedShareToken =
+            await handleSaveToUrl(
+              publicShareToken,
+            );
+
+          if (!updatedShareToken) {
+            return;
+          }
+        }
+
+        window.location.assign(
+          `/view?dashboard=${encodeURIComponent(
+            savedCloudId,
+          )}`,
+        );
+        return;
+      }
+
+      if (sharedDashboardToken) {
+        const savedShareToken =
+          await handleSaveToUrl(
+            sharedDashboardToken,
+          );
+
+        if (!savedShareToken) {
+          return;
+        }
+
+        window.location.assign(
+          `/view?share=${encodeURIComponent(
+            savedShareToken,
+          )}`,
+        );
+        return;
+      }
+
+      window.location.assign(
+        "/view",
+      );
+    } finally {
+      setFinishing(false);
     }
   }
 
@@ -965,109 +1221,273 @@ export function DashboardBuilder() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--border)] bg-white px-5 py-3">
-        <div className="flex min-w-0 items-center gap-4">
-          <Link
-            href="/"
-            className="shrink-0 text-sm font-medium text-[var(--accent)]"
-          >
-            Fishing Forecast
-          </Link>
-          <input
-            aria-label="Dashboard name"
-            value={dashboard.name}
-            onChange={(event) =>
-              updateDashboardName(event.target.value)
-            }
-            className="min-w-0 max-w-sm rounded-xl border border-transparent bg-[var(--surface-muted)] px-3 py-2 font-medium focus:border-[var(--accent)] focus:bg-white"
-          />
-        </div>
+    <main
+      className="dashboard-theme min-h-screen text-[var(--foreground)]"
+      data-theme={dashboard.theme}
+      style={{
+        backgroundColor:
+          "var(--dashboard-background, var(--background))",
+        backgroundImage:
+          "var(--dashboard-pattern, none)",
+        backgroundSize:
+          "var(--dashboard-pattern-size, auto)",
+        backgroundPosition:
+          "center",
+      }}
+    >
+      <DashboardStage
+        dashboard={dashboard}
+        layout={activeLayout}
+        subtitle={
+          primaryWeatherSource?.label
+        }
+        weatherStates={weatherStates}
+        tideStates={tideStates}
+        marineStates={marineStates}
+        astronomyStates={
+          astronomyStates
+        }
+        radarStates={radarStates}
+        forecastContext={
+          forecastContext
+        }
+        onForecastDateChange={
+          setSelectedForecastDateOverride
+        }
+        onWidgetSettingsChange={
+          updateWidgetSettings
+        }
+        mode="edit"
+        showGrid={showGrid}
+        selectedWidgetId={
+          selectedWidgetId
+        }
+        onSelectWidget={
+          selectWidget
+        }
+        onPlacementsChange={
+          updatePlacements
+        }
+      />
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <label className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm">
-            <span className="text-[var(--muted)]">
-              Forecast date
-            </span>
-            <select
-              aria-label="Forecast date"
-              value={selectedForecastDate}
-              onChange={(event) =>
-                setSelectedForecastDateOverride(
-                  event.target.value,
-                )
+      <div className="fixed left-3 top-3 z-[70] flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            setEditorOpen(
+              (current) =>
+                !current,
+            )
+          }
+          className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
+        >
+          {editorOpen
+            ? "Hide tools"
+            : "Edit tools"}
+        </button>
+
+        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium shadow-sm">
+          {activeLayout.device ===
+          "mobile"
+            ? "Mobile"
+            : "Desktop"}
+        </span>
+      </div>
+
+      <div className="fixed right-3 top-3 z-[70]">
+        <button
+          type="button"
+          onClick={() =>
+            void handleDone()
+          }
+          disabled={
+            finishing ||
+            saveState === "saving"
+          }
+          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-60"
+        >
+          {finishing ||
+          saveState === "saving"
+            ? "Saving…"
+            : "Done"}
+        </button>
+      </div>
+
+      {editorOpen ? (
+        <section className="fixed inset-x-0 bottom-0 z-[60] flex h-[72vh] flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-white shadow-2xl lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-16 lg:h-auto lg:w-[390px] lg:rounded-2xl">
+          <header className="border-b border-[var(--border)] bg-white p-3">
+            <div className="flex items-center gap-2">
+              <input
+                aria-label="Dashboard name"
+                value={dashboard.name}
+                onChange={(event) =>
+                  updateDashboardName(
+                    event.target.value,
+                  )
+                }
+                className="min-w-0 flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setEditorOpen(false)
+                }
+                className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                aria-label="Close editor tools"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={
+                  saveState ===
+                  "saving"
+                }
+                className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={
+                  handleOpenUrlSave
+                }
+                disabled={
+                  savingSharedUrl
+                }
+                className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
+              >
+                Save URL
+              </button>
+              <label className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={showGrid}
+                  onChange={(event) =>
+                    setShowGrid(
+                      event.target
+                        .checked,
+                    )
+                  }
+                />
+                Grid
+              </label>
+              <div className="ml-auto">
+                <AccountMenu />
+              </div>
+            </div>
+          </header>
+
+          <div className="min-h-0 flex-1">
+            <BuilderToolbar
+              panel={panel}
+              onPanelChange={
+                setPanel
               }
-              className="bg-transparent font-medium"
-            >
-              {availableForecastDates.map((date) => (
-                <option key={date} value={date}>
-                  {formatForecastDateLabel({
-                    date,
-                    todayDate,
-                  })}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {dashboard.layouts.map((layout) => (
-            <button
-              key={layout.id}
-              type="button"
-              onClick={() => {
-                setActiveLayoutId(layout.id);
-                setSelectedWidgetId(undefined);
-                setZoom("fit");
+              layouts={
+                dashboard.layouts
+              }
+              activeLayout={
+                activeLayout
+              }
+              theme={
+                dashboard.theme
+              }
+              widgets={
+                dashboard.widgets
+              }
+              sources={
+                dashboard.sources
+              }
+              weatherStates={
+                weatherStates
+              }
+              tideStates={
+                tideStates
+              }
+              marineStates={
+                marineStates
+              }
+              astronomyStates={
+                astronomyStates
+              }
+              radarStates={
+                radarStates
+              }
+              selectedWidget={
+                selectedWidget
+              }
+              selectedPlacement={
+                selectedPlacement
+              }
+              onSelectLayout={(
+                layoutId,
+              ) => {
+                setActiveLayoutId(
+                  layoutId,
+                );
+                setSelectedWidgetId(
+                  undefined,
+                );
               }}
-              className={[
-                "rounded-xl px-3 py-2 text-sm",
-                layout.id === activeLayout.id
-                  ? "bg-[var(--selection)] font-medium text-[var(--accent)]"
-                  : "text-[var(--muted)] hover:bg-[var(--surface-muted)]",
-              ].join(" ")}
-            >
-              {layout.name}
-            </button>
-          ))}
-          <Link
-            href="/view"
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
-          >
-            View dashboard
-          </Link>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saveState === "saving"}
-            className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
-            {saveState === "saving"
-              ? "Saving..."
-              : saveState === "saved"
-                ? "Saved"
-                : "Save"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleOpenUrlSave}
-            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
-          >
-            Save URL
-          </button>
-
-          <AccountMenu />
-        </div>
-      </header>
+              onCreateLayout={
+                createLayout
+              }
+              onDeleteLayout={
+                deleteLayout
+              }
+              onApplyLayoutPreset={
+                applyLayoutPreset
+              }
+              onUpdateLayout={
+                updateLayout
+              }
+              onResetLayout={
+                resetLayout
+              }
+              onThemeChange={
+                updateDashboardTheme
+              }
+              onAddWidget={
+                addWidget
+              }
+              onWeatherLocationChange={
+                updateWeatherLocation
+              }
+              onAddTideSource={
+                addTideSource
+              }
+              onRemoveSource={
+                removeSource
+              }
+              onUpdateWidget={
+                updateSelectedWidget
+              }
+              onUpdatePlacement={
+                updateSelectedPlacement
+              }
+              onDuplicateWidget={
+                duplicateSelectedWidget
+              }
+              onRemoveWidget={
+                removeSelectedWidget
+              }
+            />
+          </div>
+        </section>
+      ) : null}
 
       {saveMessage ? (
         <div
           className={[
-            "border-b px-5 py-2 text-center text-xs",
+            "fixed bottom-3 left-1/2 z-[80] max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-lg",
             saveState === "error"
               ? "border-red-200 bg-red-50 text-red-800"
-              : "border-[var(--border)] bg-[var(--surface-muted)] text-[var(--muted)]",
+              : "border-[var(--border)] bg-[var(--surface)] text-[var(--muted)]",
           ].join(" ")}
           role="status"
         >
@@ -1075,85 +1495,24 @@ export function DashboardBuilder() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col lg:h-[calc(100vh-65px)] lg:flex-row">
-        <BuilderToolbar
-          panel={panel}
-          onPanelChange={setPanel}
-          layouts={dashboard.layouts}
-          activeLayout={activeLayout}
-          theme={dashboard.theme}
-          widgets={dashboard.widgets}
-          sources={dashboard.sources}
-          weatherStates={weatherStates}
-          tideStates={tideStates}
-          marineStates={marineStates}
-          astronomyStates={astronomyStates}
-          radarStates={radarStates}
-          selectedWidget={selectedWidget}
-          selectedPlacement={selectedPlacement}
-          onSelectLayout={(layoutId) => {
-            setActiveLayoutId(layoutId);
-            setSelectedWidgetId(undefined);
-            setZoom("fit");
-          }}
-          onCreateLayout={createLayout}
-          onDeleteLayout={deleteLayout}
-          onApplyLayoutPreset={applyLayoutPreset}
-          onUpdateLayout={updateLayout}
-          onResetLayout={resetLayout}
-          onThemeChange={updateDashboardTheme}
-          onAddWidget={addWidget}
-          onWeatherLocationChange={
-            updateWeatherLocation
-          }
-          onAddTideSource={addTideSource}
-          onRemoveSource={removeSource}
-          onUpdateWidget={updateSelectedWidget}
-          onUpdatePlacement={
-            updateSelectedPlacement
-          }
-          onDuplicateWidget={
-            duplicateSelectedWidget
-          }
-          onRemoveWidget={removeSelectedWidget}
-        />
-
-        <BuilderPreview
-          layout={activeLayout}
-          theme={dashboard.theme}
-          widgets={dashboard.widgets}
-          sources={dashboard.sources}
-          weatherStates={weatherStates}
-          tideStates={tideStates}
-          marineStates={marineStates}
-          astronomyStates={astronomyStates}
-          radarStates={radarStates}
-          forecastContext={forecastContext}
-          onForecastDateChange={
-            setSelectedForecastDateOverride
-          }
-          onWidgetSettingsChange={
-            updateWidgetSettings
-          }
-          mode={mode}
-          zoom={zoom}
-          showGrid={showGrid}
-          selectedWidgetId={selectedWidgetId}
-          onModeChange={setMode}
-          onZoomChange={setZoom}
-          onShowGridChange={setShowGrid}
-          onSelectWidget={selectWidget}
-          onPlacementsChange={updatePlacements}
-        />
-      </div>
-
       <SaveOptionsDialog
-        open={saveOptionsMode !== null}
-        mode={saveOptionsMode ?? "guest"}
-        savingUrl={savingSharedUrl}
+        open={
+          saveOptionsMode !== null
+        }
+        mode={
+          saveOptionsMode ??
+          "guest"
+        }
+        savingUrl={
+          savingSharedUrl
+        }
         sharedUrl={sharedUrl}
-        expiresAt={sharedExpiresAt}
-        error={sharedSaveError}
+        expiresAt={
+          sharedExpiresAt
+        }
+        error={
+          sharedSaveError
+        }
         onClose={() =>
           setSaveOptionsMode(null)
         }
@@ -1167,7 +1526,9 @@ export function DashboardBuilder() {
 
       <AuthDialog
         open={authOpen}
-        onClose={() => setAuthOpen(false)}
+        onClose={() =>
+          setAuthOpen(false)
+        }
         initialMode="signup"
         intent="Save your dashboard"
       />
@@ -1175,10 +1536,77 @@ export function DashboardBuilder() {
   );
 }
 
+function prepareDashboardForViewport(
+  source: FishingDashboard,
+): {
+  dashboard: FishingDashboard;
+  layoutId: string;
+} {
+  const preferMobile =
+    isMobileViewport();
+
+  if (preferMobile) {
+    const existingMobile =
+      source.layouts.find(
+        (layout) =>
+          layout.device ===
+          "mobile",
+      );
+
+    if (existingMobile) {
+      return {
+        dashboard: source,
+        layoutId:
+          existingMobile.id,
+      };
+    }
+
+    const mobileLayout =
+      createMobileLayoutFromDesktop(
+        source.widgets,
+      );
+
+    return {
+      dashboard: {
+        ...source,
+        layouts: [
+          ...source.layouts,
+          mobileLayout,
+        ],
+      },
+      layoutId:
+        mobileLayout.id,
+    };
+  }
+
+  const desktop =
+    source.layouts.find(
+      (layout) =>
+        layout.device ===
+        "desktop",
+    ) ?? source.layouts[0];
+
+  return {
+    dashboard: source,
+    layoutId: desktop.id,
+  };
+}
+
+function isMobileViewport(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia(
+      "(max-width: 700px)",
+    ).matches
+  );
+}
+
 function createId(): string {
   if (
-    typeof globalThis.crypto !== "undefined" &&
-    "randomUUID" in globalThis.crypto
+    typeof globalThis.crypto !==
+      "undefined" &&
+    "randomUUID" in
+      globalThis.crypto
   ) {
     return globalThis.crypto
       .randomUUID()
@@ -1190,34 +1618,45 @@ function createId(): string {
     .slice(2, 10);
 }
 
-
 const CLOUD_SHARE_KEY_PREFIX =
   "fishing-forecast:cloud-share:";
 const SHARED_EDIT_KEY_PREFIX =
   "fishing-forecast:shared-edit:";
 
-function getCurrentShareToken(
-  stateToken?: string,
-): string | undefined {
-  if (stateToken) {
-    return stateToken;
-  }
-
-  if (typeof window === "undefined") {
+function getShareTokenFromLocation():
+  | string
+  | undefined {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return undefined;
   }
 
   return (
     new URLSearchParams(
       window.location.search,
-    ).get("share") ?? undefined
+    ).get("share") ??
+    undefined
+  );
+}
+
+function getCurrentShareToken(
+  stateToken?: string,
+): string | undefined {
+  return (
+    stateToken ??
+    getShareTokenFromLocation()
   );
 }
 
 function hasSharedEditToken(
   shareToken: string,
 ): boolean {
-  if (typeof window === "undefined") {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return false;
   }
 
@@ -1232,7 +1671,10 @@ function rememberCloudShareToken(
   cloudDashboardId: string,
   shareToken: string,
 ) {
-  if (typeof window === "undefined") {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return;
   }
 
@@ -1245,7 +1687,10 @@ function rememberCloudShareToken(
 function loadRememberedCloudShareToken(
   cloudDashboardId: string,
 ): string | undefined {
-  if (typeof window === "undefined") {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return undefined;
   }
 
@@ -1256,24 +1701,33 @@ function loadRememberedCloudShareToken(
   );
 }
 
-
 function dateKeyInTimezone(
   date: Date,
   timezone: string,
 ): string {
   try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const values = Object.fromEntries(
-      parts.map((part) => [part.type, part.value]),
-    );
+    const parts =
+      new Intl.DateTimeFormat(
+        "en-US",
+        {
+          timeZone: timezone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        },
+      ).formatToParts(date);
+    const values =
+      Object.fromEntries(
+        parts.map((part) => [
+          part.type,
+          part.value,
+        ]),
+      );
 
     return `${values.year}-${values.month}-${values.day}`;
   } catch {
-    return date.toISOString().slice(0, 10);
+    return date
+      .toISOString()
+      .slice(0, 10);
   }
 }

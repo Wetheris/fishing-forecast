@@ -8,14 +8,13 @@ import {
   useState,
 } from "react";
 import type {
-  DashboardLayout,
   DashboardSource,
   FishingDashboard,
 } from "@/types/dashboard";
 import type { ForecastContext } from "@/types/forecast";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthDialog } from "@/components/auth/AuthDialog";
-import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
+import { DashboardStage } from "@/components/dashboard/DashboardStage";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
   useAstronomySources,
@@ -29,7 +28,6 @@ import {
   loadSharedDashboard,
 } from "@/lib/dashboard-storage";
 import { createMobileLayoutFromDesktop } from "@/lib/dashboard-layouts";
-import { getLayoutContentHeight } from "@/lib/layout-measurements";
 
 const EMPTY_SOURCES: DashboardSource[] = [];
 
@@ -77,10 +75,7 @@ export function DashboardViewer() {
     media.addEventListener("change", update);
 
     return () => {
-      media.removeEventListener(
-        "change",
-        update,
-      );
+      media.removeEventListener("change", update);
     };
   }, []);
 
@@ -268,18 +263,17 @@ export function DashboardViewer() {
       : dashboard.layouts;
   }, [automaticMobileLayout, dashboard]);
 
-  const automaticLayout = dashboard
+  const activeLayout = dashboard
     ? preferMobile
       ? viewerLayouts.find(
-          (layout) => layout.device === "mobile",
+          (layout) =>
+            layout.device === "mobile",
         ) ?? viewerLayouts[0]
       : viewerLayouts.find(
-          (layout) => layout.device === "desktop",
+          (layout) =>
+            layout.device === "desktop",
         ) ?? viewerLayouts[0]
     : undefined;
-
-  const activeLayout =
-    automaticLayout;
 
   function updateWidgetSettings(
     widgetId: string,
@@ -388,10 +382,9 @@ export function DashboardViewer() {
         Edit
       </Link>
 
-      <ResponsiveDashboardCanvas
+      <DashboardStage
         dashboard={dashboard}
         layout={activeLayout}
-        title={dashboard.name}
         subtitle={primaryWeatherSource?.label}
         weatherStates={weatherStates}
         tideStates={tideStates}
@@ -405,174 +398,9 @@ export function DashboardViewer() {
         onWidgetSettingsChange={
           updateWidgetSettings
         }
+        mode="view"
       />
     </main>
-  );
-}
-
-function ResponsiveDashboardCanvas({
-  dashboard,
-  layout,
-  title,
-  subtitle,
-  weatherStates,
-  tideStates,
-  marineStates,
-  astronomyStates,
-  radarStates,
-  forecastContext,
-  onForecastDateChange,
-  onWidgetSettingsChange,
-}: {
-  dashboard: FishingDashboard;
-  layout: DashboardLayout;
-  title: string;
-  subtitle?: string;
-  weatherStates: ReturnType<
-    typeof useWeatherSources
-  >;
-  tideStates: ReturnType<
-    typeof useTideSources
-  >;
-  marineStates: ReturnType<
-    typeof useMarineSources
-  >;
-  astronomyStates: ReturnType<
-    typeof useAstronomySources
-  >;
-  radarStates: ReturnType<
-    typeof useRadarSources
-  >;
-  forecastContext: ForecastContext;
-  onForecastDateChange: (date: string) => void;
-  onWidgetSettingsChange: (
-    widgetId: string,
-    settings: Record<string, unknown>,
-  ) => void;
-}) {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [stageWidth, setStageWidth] =
-    useState(layout.viewport.width);
-
-  useEffect(() => {
-    const element = stageRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    let frame = 0;
-    const measure = () => {
-      setStageWidth(element.clientWidth);
-    };
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
-    });
-
-    observer.observe(element);
-    measure();
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, []);
-
-  const contentHeight =
-    getLayoutContentHeight(layout);
-  const titleHeight =
-    layout.device === "mobile" ? 82 : 104;
-  const totalHeight =
-    titleHeight + contentHeight;
-  const scale = Math.min(
-    1,
-    Math.max(
-      0.2,
-      stageWidth / layout.viewport.width,
-    ),
-  );
-  const displayedWidth = Math.round(
-    layout.viewport.width * scale,
-  );
-  const displayedHeight = Math.round(
-    totalHeight * scale,
-  );
-
-  return (
-    <div
-      ref={stageRef}
-      className="min-h-screen overflow-x-auto"
-    >
-      <div
-        className="mx-auto shrink-0 overflow-hidden"
-        style={{
-          width: displayedWidth,
-          height: displayedHeight,
-        }}
-      >
-        <div
-          className="dashboard-theme origin-top-left text-[var(--foreground)]"
-          data-theme={dashboard.theme}
-          style={{
-            width: layout.viewport.width,
-            height: totalHeight,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            backgroundColor:
-              "var(--dashboard-background, var(--background))",
-          }}
-        >
-          <header
-            className="flex flex-col justify-center"
-            style={{
-              height: titleHeight,
-              paddingInline:
-                layout.device === "mobile"
-                  ? 16
-                  : 28,
-            }}
-          >
-            <h1
-              className={
-                layout.device === "mobile"
-                  ? "text-2xl font-semibold"
-                  : "text-3xl font-semibold"
-              }
-            >
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                {subtitle}
-              </p>
-            ) : null}
-          </header>
-
-          <DashboardCanvas
-            layout={layout}
-            theme={dashboard.theme}
-            widgets={dashboard.widgets}
-            sources={dashboard.sources}
-            weatherStates={weatherStates}
-            tideStates={tideStates}
-            marineStates={marineStates}
-            astronomyStates={astronomyStates}
-            radarStates={radarStates}
-            forecastContext={forecastContext}
-            onForecastDateChange={
-              onForecastDateChange
-            }
-            onWidgetSettingsChange={
-              onWidgetSettingsChange
-            }
-            mode="view"
-            scale={scale}
-            showGrid={false}
-          />
-        </div>
-      </div>
-    </div>
   );
 }
 
