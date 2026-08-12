@@ -816,18 +816,21 @@ export function DashboardBuilder() {
             sharedDashboardToken,
         });
 
-      const url =
+      const editorUrl =
         new URL(window.location.href);
-      url.searchParams.delete(
+      editorUrl.pathname = "/build";
+      editorUrl.searchParams.delete(
         "dashboard",
       );
-      url.searchParams.set(
+      editorUrl.searchParams.set(
         "share",
         saved.shareToken,
       );
 
+      const viewUrl = new URL(editorUrl);
+      viewUrl.pathname = "/view";
       const shareUrl =
-        url.toString();
+        viewUrl.toString();
 
       setSharedDashboardToken(
         saved.shareToken,
@@ -852,7 +855,7 @@ export function DashboardBuilder() {
         window.history.replaceState(
           {},
           "",
-          url,
+          editorUrl,
         );
       }
     } catch (caught) {
@@ -938,6 +941,13 @@ export function DashboardBuilder() {
               {layout.name}
             </button>
           ))}
+          <Link
+            href="/view"
+            className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+          >
+            View dashboard
+          </Link>
+
           <button
             type="button"
             onClick={handleSave}

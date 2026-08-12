@@ -116,8 +116,8 @@ export function SavedDashboardsPage() {
           My dashboards
         </h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Open a saved dashboard and continue
-          editing it.
+          View saved dashboards or open them in
+          the editor.
         </p>
 
         {authLoading ? (
@@ -194,14 +194,23 @@ export function SavedDashboardsPage() {
                     )}
                   </p>
 
-                  <div className="mt-5 flex items-center gap-2">
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/build?dashboard=${encodeURIComponent(
+                      href={`/view?dashboard=${encodeURIComponent(
                         dashboard.id,
                       )}`}
                       className="rounded-xl bg-[var(--accent)] px-3 py-2 text-sm font-medium text-white"
                     >
-                      Open
+                      View
+                    </Link>
+
+                    <Link
+                      href={`/build?dashboard=${encodeURIComponent(
+                        dashboard.id,
+                      )}`}
+                      className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+                    >
+                      Edit
                     </Link>
 
                     <button
