@@ -782,6 +782,11 @@ export function DashboardBuilder() {
   }
 
   function handleSave() {
+    if (sharedDashboardToken) {
+      void handleSaveToUrl();
+      return;
+    }
+
     if (!user) {
       setSharedUrl(undefined);
       setSharedSaveError(undefined);
@@ -807,6 +812,12 @@ export function DashboardBuilder() {
   async function handleSaveToUrl() {
     setSavingSharedUrl(true);
     setSharedSaveError(undefined);
+    setSaveState("saving");
+    setSaveMessage(
+      sharedDashboardToken
+        ? "Updating saved URL…"
+        : "Saving dashboard to URL…",
+    );
 
     try {
       const saved =
