@@ -223,37 +223,60 @@ export function TideTimelineWidget({
           );
         }
 
-        return displayMode === "chart" && !compact ? (
-          <TideChart
-            events={events}
-            timeline={timeline}
-            currentLocalTime={
-              data.currentLocalTime
-            }
-            showCurrentMarker={
-              isToday && showCurrentMarker
-            }
-            showHighLowLabels={
-              showHighLowLabels && !compact
-            }
-            compact={compact}
-          />
-        ) : (
-          <CompactTimeline
-            columns={visibleEvents
-              .slice(0, 4)
-              .map((event) => ({
-                label:
-                  event.type === "high"
-                    ? "High"
-                    : "Low",
-                primary: event.displayTime,
-                secondary: formatHeight(
-                  event.heightFt,
-                  widget,
-                ),
-              }))}
-          />
+        const canShowDetailedChart =
+          displayMode === "chart" &&
+          !compact &&
+          timeline.length >= 2;
+
+        if (canShowDetailedChart) {
+          return (
+            <TideChart
+              events={events}
+              timeline={timeline}
+              currentLocalTime={
+                data.currentLocalTime
+              }
+              showCurrentMarker={
+                isToday && showCurrentMarker
+              }
+              showHighLowLabels={
+                showHighLowLabels && !compact
+              }
+              compact={compact}
+            />
+          );
+        }
+
+        return (
+          <div className="space-y-2">
+            <CompactTimeline
+              columns={visibleEvents
+                .slice(0, 4)
+                .map((event) => ({
+                  label:
+                    event.type === "high"
+                      ? "High"
+                      : "Low",
+                  primary:
+                    event.displayTime,
+                  secondary: formatHeight(
+                    event.heightFt,
+                    widget,
+                  ),
+                }))}
+            />
+
+            {displayMode === "chart" &&
+            !compact &&
+            timeline.length < 2 ? (
+              <p className="text-xs text-[var(--muted)]">
+                This NOAA station does not
+                provide a detailed tide curve.
+                High and low predictions are
+                shown instead.
+              </p>
+            ) : null}
+          </div>
         );
       }}
     </LiveDataView>
