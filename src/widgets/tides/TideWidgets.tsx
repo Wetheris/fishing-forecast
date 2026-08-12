@@ -15,7 +15,10 @@ import {
   feetToMeters,
   roundToTenth,
 } from "@/lib/units";
-import { formatForecastDateLabel } from "@/lib/forecast-selection";
+import {
+  formatCompactForecastDateLabel,
+  formatForecastDateLabel,
+} from "@/lib/forecast-selection";
 import type {
   TideEvent,
   TideSourceData,
@@ -188,27 +191,44 @@ export function TideTimelineWidget({
       loadingDetail="Loading high, low, and six-minute predictions."
     >
       {(data) => {
-        const events = eventsForDate(
-          data,
-          forecastContext.selectedDate,
-        );
-        const timeline = data.timeline.filter(
-          (point) =>
-            point.localTime.slice(0, 10) ===
-            forecastContext.selectedDate,
-        );
         const isToday =
           forecastContext.selectedDate ===
           forecastContext.todayDate;
-        const visibleEvents = isToday
-          ? events.filter(
-              (event) =>
-                event.localTime >=
-                data.currentLocalTime,
-            )
-          : events;
+        const dateEvents = eventsForDate(
+          data,
+          forecastContext.selectedDate,
+        );
+        const upcomingEvents = data.events.filter(
+          (event) =>
+            event.localTime >=
+            data.currentLocalTime,
+        );
+        const chartEvents = isToday
+          ? upcomingEvents.slice(0, 5)
+          : dateEvents;
+        const visibleEvents =
+          chartEvents.slice(0, 4);
+        const chartEnd =
+          chartEvents.at(-1)?.localTime;
+        const timeline = data.timeline.filter(
+          (point) => {
+            if (!isToday) {
+              return (
+                point.localTime.slice(0, 10) ===
+                forecastContext.selectedDate
+              );
+            }
 
-        if (events.length === 0) {
+            return (
+              point.localTime >=
+                data.currentLocalTime &&
+              (!chartEnd ||
+                point.localTime <= chartEnd)
+            );
+          },
+        );
+
+        if (chartEvents.length === 0) {
           return (
             <WidgetDataMessage
               title="Tide forecast unavailable"
@@ -223,60 +243,62 @@ export function TideTimelineWidget({
           );
         }
 
-        const canShowDetailedChart =
+        const canShowChart =
           displayMode === "chart" &&
           !compact &&
-          timeline.length >= 2;
+          (timeline.length >= 2 ||
+            chartEvents.length >= 2);
 
-        if (canShowDetailedChart) {
+        if (canShowChart) {
+          const approximate =
+            timeline.length < 2;
+
           return (
-            <TideChart
-              events={events}
-              timeline={timeline}
-              currentLocalTime={
-                data.currentLocalTime
-              }
-              showCurrentMarker={
-                isToday && showCurrentMarker
-              }
-              showHighLowLabels={
-                showHighLowLabels && !compact
-              }
-              compact={compact}
-            />
+            <div className="flex h-full min-h-0 flex-col gap-1.5">
+              <div className="min-h-0 flex-1">
+                <TideChart
+                  events={chartEvents}
+                  timeline={timeline}
+                  currentLocalTime={
+                    data.currentLocalTime
+                  }
+                  showCurrentMarker={
+                    isToday &&
+                    showCurrentMarker
+                  }
+                  showHighLowLabels={
+                    showHighLowLabels
+                  }
+                  compact={false}
+                />
+              </div>
+
+              {approximate ? (
+                <p className="shrink-0 text-center text-[10px] text-[var(--muted)]">
+                  Approximate curve from NOAA high/low predictions.
+                </p>
+              ) : null}
+            </div>
           );
         }
 
         return (
-          <div className="space-y-2">
-            <CompactTimeline
-              columns={visibleEvents
-                .slice(0, 4)
-                .map((event) => ({
-                  label:
-                    event.type === "high"
-                      ? "High"
-                      : "Low",
-                  primary:
-                    event.displayTime,
-                  secondary: formatHeight(
-                    event.heightFt,
-                    widget,
-                  ),
-                }))}
-            />
-
-            {displayMode === "chart" &&
-            !compact &&
-            timeline.length < 2 ? (
-              <p className="text-xs text-[var(--muted)]">
-                This NOAA station does not
-                provide a detailed tide curve.
-                High and low predictions are
-                shown instead.
-              </p>
-            ) : null}
-          </div>
+          <CompactTimeline
+            columns={visibleEvents.map(
+              (event) => ({
+                label: tideEventLabel(
+                  event,
+                  forecastContext.todayDate,
+                  isToday,
+                ),
+                primary: event.displayTime,
+                secondary: formatHeight(
+                  event.heightFt,
+                  widget,
+                ),
+              }),
+            )}
+          />
         );
       }}
     </LiveDataView>
@@ -340,15 +362,49 @@ function findSelectedEvent(
   todayDate: string,
   type: TideEvent["type"],
 ): TideEvent | null {
+  if (selectedDate === todayDate) {
+    return (
+      data.events.find(
+        (event) =>
+          event.type === type &&
+          event.localTime >=
+            data.currentLocalTime,
+      ) ?? null
+    );
+  }
+
   return (
     eventsForDate(data, selectedDate).find(
-      (event) =>
-        event.type === type &&
-        (selectedDate !== todayDate ||
-          event.localTime >=
-            data.currentLocalTime),
+      (event) => event.type === type,
     ) ?? null
   );
+}
+
+function tideEventLabel(
+  event: TideEvent,
+  todayDate: string,
+  showDate: boolean,
+): string {
+  const tideLabel =
+    event.type === "high" ? "High" : "Low";
+
+  if (!showDate) {
+    return tideLabel;
+  }
+
+  const eventDate =
+    event.localTime.slice(0, 10);
+
+  if (eventDate === todayDate) {
+    return tideLabel;
+  }
+
+  return `${tideLabel} · ${formatCompactForecastDateLabel(
+    {
+      date: eventDate,
+      todayDate,
+    },
+  )}`;
 }
 
 function formatHeight(
