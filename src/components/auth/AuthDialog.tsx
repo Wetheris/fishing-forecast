@@ -7,26 +7,34 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 
-type AuthMode = "signin" | "signup";
+export type AuthDialogMode =
+  | "signin"
+  | "signup";
+
+type DialogView =
+  | AuthDialogMode
+  | "reset";
 
 export function AuthDialog({
   open,
   onClose,
   initialMode = "signup",
-  intent = "Save your dashboard",
+  intent = "Your fishing account",
 }: {
   open: boolean;
   onClose: () => void;
-  initialMode?: AuthMode;
+  initialMode?: AuthDialogMode;
   intent?: string;
 }) {
   const {
     configured,
     signIn,
     signUp,
+    sendPasswordReset,
+    resendEmailConfirmation,
   } = useAuth();
-  const [mode, setMode] =
-    useState<AuthMode>(initialMode);
+  const [view, setView] =
+    useState<DialogView>(initialMode);
   const [email, setEmail] =
     useState("");
   const [password, setPassword] =
@@ -39,15 +47,18 @@ export function AuthDialog({
     useState<"success" | "error">(
       "success",
     );
+  const [needsVerification, setNeedsVerification] =
+    useState(false);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setMode(initialMode);
+    setView(initialMode);
     setPassword("");
     setMessage(undefined);
+    setNeedsVerification(false);
   }, [initialMode, open]);
 
   useEffect(() => {
@@ -86,24 +97,67 @@ export function AuthDialog({
     event.preventDefault();
     setSubmitting(true);
     setMessage(undefined);
+    setNeedsVerification(false);
 
-    const result =
-      mode === "signup"
-        ? await signUp(email, password)
-        : await signIn(email, password);
-
-    setSubmitting(false);
-
-    if (!result.ok) {
-      setMessageKind("error");
+    if (view === "reset") {
+      const result =
+        await sendPasswordReset(
+          email.trim(),
+        );
+      setSubmitting(false);
+      setMessageKind(
+        result.ok
+          ? "success"
+          : "error",
+      );
       setMessage(
         result.message ??
-          "Unable to authenticate.",
+          "Unable to send password reset email.",
       );
       return;
     }
 
-    if (result.needsEmailConfirmation) {
+    const result =
+      view === "signup"
+        ? await signUp(
+            email.trim(),
+            password,
+          )
+        : await signIn(
+            email.trim(),
+            password,
+          );
+
+    setSubmitting(false);
+
+    if (!result.ok) {
+      const verificationError =
+        view === "signin" &&
+        Boolean(
+          result.message
+            ?.toLowerCase()
+            .includes(
+              "email not confirmed",
+            ),
+        );
+
+      setNeedsVerification(
+        verificationError,
+      );
+      setMessageKind("error");
+      setMessage(
+        verificationError
+          ? "Your email has not been verified yet. You can resend the verification email below or continue using the app as a guest."
+          : result.message ??
+              "Unable to authenticate.",
+      );
+      return;
+    }
+
+    if (
+      result.needsEmailConfirmation
+    ) {
+      setNeedsVerification(true);
       setMessageKind("success");
       setMessage(result.message);
       return;
@@ -112,13 +166,45 @@ export function AuthDialog({
     onClose();
   }
 
+  async function resendVerification() {
+    if (!email.trim()) {
+      return;
+    }
+
+    setSubmitting(true);
+    const result =
+      await resendEmailConfirmation(
+        email.trim(),
+      );
+    setSubmitting(false);
+    setMessageKind(
+      result.ok
+        ? "success"
+        : "error",
+    );
+    setMessage(
+      result.message ??
+        "Unable to resend verification email.",
+    );
+  }
+
+  function changeView(
+    next: DialogView,
+  ) {
+    setView(next);
+    setPassword("");
+    setMessage(undefined);
+    setNeedsVerification(false);
+  }
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/55 p-4"
       role="presentation"
       onMouseDown={(event) => {
         if (
-          event.currentTarget === event.target
+          event.currentTarget ===
+          event.target
         ) {
           onClose();
         }
@@ -136,12 +222,16 @@ export function AuthDialog({
               id="auth-dialog-title"
               className="text-lg font-semibold"
             >
-              {intent}
+              {view === "reset"
+                ? "Reset password"
+                : intent}
             </h2>
             <p className="mt-1 text-sm text-[var(--muted)]">
-              {mode === "signup"
-                ? "Create an account to keep dashboards synced across devices."
-                : "Sign in to access and save your dashboards."}
+              {view === "signup"
+                ? "Create an account for saved dashboards, sessions, and catch photos."
+                : view === "signin"
+                  ? "Sign in to access your saved fishing data."
+                  : "Enter your email and we will send you a secure reset link."}
             </p>
           </div>
 
@@ -155,39 +245,39 @@ export function AuthDialog({
           </button>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 rounded-xl bg-[var(--surface-muted)] p-1">
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signup");
-              setMessage(undefined);
-            }}
-            className={[
-              "rounded-lg px-3 py-2 text-sm",
-              mode === "signup"
-                ? "bg-white font-medium shadow-sm"
-                : "text-[var(--muted)]",
-            ].join(" ")}
-          >
-            Create account
-          </button>
+        {view !== "reset" ? (
+          <div className="mt-5 grid grid-cols-2 rounded-xl bg-[var(--surface-muted)] p-1">
+            <button
+              type="button"
+              onClick={() =>
+                changeView("signup")
+              }
+              className={[
+                "rounded-lg px-3 py-2 text-sm",
+                view === "signup"
+                  ? "bg-white font-medium shadow-sm"
+                  : "text-[var(--muted)]",
+              ].join(" ")}
+            >
+              Create account
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signin");
-              setMessage(undefined);
-            }}
-            className={[
-              "rounded-lg px-3 py-2 text-sm",
-              mode === "signin"
-                ? "bg-white font-medium shadow-sm"
-                : "text-[var(--muted)]",
-            ].join(" ")}
-          >
-            Sign in
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() =>
+                changeView("signin")
+              }
+              className={[
+                "rounded-lg px-3 py-2 text-sm",
+                view === "signin"
+                  ? "bg-white font-medium shadow-sm"
+                  : "text-[var(--muted)]",
+              ].join(" ")}
+            >
+              Sign in
+            </button>
+          </div>
+        ) : null}
 
         {!configured ? (
           <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -212,36 +302,54 @@ export function AuthDialog({
               required
               value={email}
               onChange={(event) =>
-                setEmail(event.target.value)
+                setEmail(
+                  event.target.value,
+                )
               }
               className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
               placeholder="you@example.com"
             />
           </label>
 
-          <label className="block">
-            <span className="text-sm font-medium">
-              Password
-            </span>
-            <input
-              type="password"
-              autoComplete={
-                mode === "signup"
-                  ? "new-password"
-                  : "current-password"
-              }
-              required
-              minLength={6}
-              value={password}
-              onChange={(event) =>
-                setPassword(
-                  event.target.value,
-                )
-              }
-              className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
-              placeholder="At least 6 characters"
-            />
-          </label>
+          {view !== "reset" ? (
+            <label className="block">
+              <span className="text-sm font-medium">
+                Password
+              </span>
+              <input
+                type="password"
+                autoComplete={
+                  view === "signup"
+                    ? "new-password"
+                    : "current-password"
+                }
+                required
+                minLength={6}
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value,
+                  )
+                }
+                className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-2"
+                placeholder="At least 6 characters"
+              />
+            </label>
+          ) : null}
+
+          {view === "signin" ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  changeView("reset")
+                }
+                className="text-sm font-medium text-[var(--accent)] hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          ) : null}
 
           {message ? (
             <p
@@ -257,19 +365,59 @@ export function AuthDialog({
             </p>
           ) : null}
 
+          {needsVerification ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() =>
+                  void resendVerification()
+                }
+                disabled={
+                  submitting ||
+                  !configured
+                }
+                className="rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                Resend verification
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm font-medium"
+              >
+                Continue using app
+              </button>
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={
-              submitting || !configured
+              submitting ||
+              !configured
             }
             className="w-full rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {submitting
               ? "Working..."
-              : mode === "signup"
+              : view === "signup"
                 ? "Create account"
-                : "Sign in"}
+                : view === "signin"
+                  ? "Sign in"
+                  : "Send reset link"}
           </button>
+
+          {view === "reset" ? (
+            <button
+              type="button"
+              onClick={() =>
+                changeView("signin")
+              }
+              className="w-full rounded-xl px-4 py-2 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-muted)]"
+            >
+              Back to sign in
+            </button>
+          ) : null}
         </form>
       </section>
     </div>

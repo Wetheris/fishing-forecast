@@ -11,7 +11,7 @@ import {
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type AuthResult = {
+export type AuthResult = {
   ok: boolean;
   message?: string;
   needsEmailConfirmation?: boolean;
@@ -30,6 +30,15 @@ type AuthContextValue = {
     password: string,
   ) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  sendPasswordReset: (
+    email: string,
+  ) => Promise<AuthResult>;
+  updatePassword: (
+    password: string,
+  ) => Promise<AuthResult>;
+  resendEmailConfirmation: (
+    email: string,
+  ) => Promise<AuthResult>;
 };
 
 const AuthContext =
@@ -90,11 +99,7 @@ export function AuthProvider({
     password: string,
   ): Promise<AuthResult> {
     if (!supabase) {
-      return {
-        ok: false,
-        message:
-          "Supabase is not configured. Check .env.local and restart the app.",
-      };
+      return notConfigured();
     }
 
     const { error } =
@@ -120,17 +125,11 @@ export function AuthProvider({
     password: string,
   ): Promise<AuthResult> {
     if (!supabase) {
-      return {
-        ok: false,
-        message:
-          "Supabase is not configured. Check .env.local and restart the app.",
-      };
+      return notConfigured();
     }
 
     const redirectTo =
-      typeof window === "undefined"
-        ? undefined
-        : `${window.location.origin}/build`;
+      browserUrl("/auth/verified");
 
     const { data, error } =
       await supabase.auth.signUp({
@@ -153,12 +152,14 @@ export function AuthProvider({
         ok: true,
         needsEmailConfirmation: true,
         message:
-          "Check your email to confirm your account. Your dashboard draft is saved locally and will be ready when you return.",
+          "Account created. Check your email to verify it. You can keep using the app as a guest while you wait.",
       };
     }
 
     return {
       ok: true,
+      message:
+        "Account created and signed in.",
     };
   }
 
@@ -170,6 +171,97 @@ export function AuthProvider({
     await supabase.auth.signOut();
   }
 
+  async function sendPasswordReset(
+    email: string,
+  ): Promise<AuthResult> {
+    if (!supabase) {
+      return notConfigured();
+    }
+
+    const redirectTo =
+      browserUrl("/auth/reset");
+
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo,
+        },
+      );
+
+    if (error) {
+      return {
+        ok: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      ok: true,
+      message:
+        "Password reset email sent. Open the link in that email to choose a new password.",
+    };
+  }
+
+  async function updatePassword(
+    password: string,
+  ): Promise<AuthResult> {
+    if (!supabase) {
+      return notConfigured();
+    }
+
+    const { error } =
+      await supabase.auth.updateUser({
+        password,
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      ok: true,
+      message:
+        "Your password has been updated.",
+    };
+  }
+
+  async function resendEmailConfirmation(
+    email: string,
+  ): Promise<AuthResult> {
+    if (!supabase) {
+      return notConfigured();
+    }
+
+    const emailRedirectTo =
+      browserUrl("/auth/verified");
+
+    const { error } =
+      await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo,
+        },
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        message: error.message,
+      };
+    }
+
+    return {
+      ok: true,
+      message:
+        "Verification email sent again.",
+    };
+  }
+
   const value: AuthContextValue = {
     user,
     loading,
@@ -177,6 +269,9 @@ export function AuthProvider({
     signIn,
     signUp,
     signOut,
+    sendPasswordReset,
+    updatePassword,
+    resendEmailConfirmation,
   };
 
   return (
@@ -196,4 +291,24 @@ export function useAuth(): AuthContextValue {
   }
 
   return context;
+}
+
+function browserUrl(
+  pathname: string,
+): string | undefined {
+  if (
+    typeof window === "undefined"
+  ) {
+    return undefined;
+  }
+
+  return `${window.location.origin}${pathname}`;
+}
+
+function notConfigured(): AuthResult {
+  return {
+    ok: false,
+    message:
+      "Supabase is not configured. Check .env.local and restart the app.",
+  };
 }
