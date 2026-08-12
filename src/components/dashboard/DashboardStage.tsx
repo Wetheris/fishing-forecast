@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useEffect,
   useRef,
@@ -111,30 +110,18 @@ export function DashboardStage({
     totalHeight * scale,
   );
 
-  const primaryLocation =
-    dashboard.sources.find(
-      (source) =>
-        source.kind ===
-        "weather-location" &&
-        typeof source.latitude ===
-          "number" &&
-        typeof source.longitude ===
-          "number",
-    );
-  const sessionsHref =
-    primaryLocation &&
-    typeof primaryLocation.latitude ===
-      "number" &&
-    typeof primaryLocation.longitude ===
-      "number"
-      ? `/sessions?latitude=${encodeURIComponent(
-          primaryLocation.latitude,
-        )}&longitude=${encodeURIComponent(
-          primaryLocation.longitude,
-        )}&label=${encodeURIComponent(
-          primaryLocation.label,
-        )}`
-      : "/sessions";
+  const basePadding =
+    layout.device === "mobile"
+      ? 16
+      : 28;
+  const viewLeftPadding =
+    layout.device === "mobile"
+      ? 68
+      : 76;
+  const viewRightPadding =
+    layout.device === "mobile"
+      ? 116
+      : 132;
 
   return (
     <div
@@ -161,13 +148,17 @@ export function DashboardStage({
           }}
         >
           <header
-            className="flex items-center justify-between gap-4"
+            className="flex items-center"
             style={{
               height: titleHeight,
-              paddingInline:
-                layout.device === "mobile"
-                  ? 16
-                  : 28,
+              paddingLeft:
+                mode === "view"
+                  ? viewLeftPadding
+                  : basePadding,
+              paddingRight:
+                mode === "view"
+                  ? viewRightPadding
+                  : basePadding,
             }}
           >
             <div className="min-w-0">
@@ -186,15 +177,6 @@ export function DashboardStage({
                 </p>
               ) : null}
             </div>
-
-            {mode === "view" ? (
-              <Link
-                href={sessionsHref}
-                className="mr-16 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
-              >
-                🎣 Sessions
-              </Link>
-            ) : null}
           </header>
 
           <DashboardCanvas

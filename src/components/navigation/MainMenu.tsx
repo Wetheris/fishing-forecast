@@ -153,7 +153,7 @@ export function MainMenu() {
               (current) => !current,
             )
           }
-          className="fixed right-3 top-3 z-[950] flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white/95 text-xl text-[var(--foreground)] shadow-md backdrop-blur hover:bg-[var(--surface-muted)]"
+          className="fixed left-3 top-3 z-[950] flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white/95 text-xl text-[var(--foreground)] shadow-md backdrop-blur hover:bg-[var(--surface-muted)]"
         >
           {open ? "×" : "☰"}
         </button>
@@ -169,8 +169,8 @@ export function MainMenu() {
               className="fixed inset-0 z-[920] bg-slate-950/30"
             />
 
-            <aside className="fixed inset-y-0 right-0 z-[940] flex w-[88vw] max-w-sm flex-col border-l border-[var(--border)] bg-white shadow-2xl">
-              <header className="shrink-0 border-b border-[var(--border)] px-5 py-5 pr-16">
+            <aside className="fixed inset-y-0 left-0 z-[940] flex w-[88vw] max-w-sm flex-col border-r border-[var(--border)] bg-white shadow-2xl">
+              <header className="shrink-0 border-b border-[var(--border)] py-5 pl-16 pr-5">
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
                   Fishing Forecast
                 </p>
@@ -353,17 +353,12 @@ export function MainMenu() {
       <style>{`
         body:has([data-main-menu-root][data-path="/build"])
           main > header {
-          padding-right: 4.25rem;
+          padding-left: 4.25rem;
         }
 
         body:has([data-main-menu-root])
           main > header > div {
-          padding-right: 4.75rem;
-        }
-
-        body:has([data-main-menu-root][data-path="/view"])
-          main.dashboard-theme > a[href^="/build"] {
-          right: 4.25rem !important;
+          padding-left: 4.75rem;
         }
       `}</style>
     </>

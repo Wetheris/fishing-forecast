@@ -23,6 +23,7 @@ import {
   useTideSources,
 } from "@/hooks/useLiveSources";
 import {
+  deleteCloudDashboard,
   loadCloudDashboard,
   loadLocalDashboardDraft,
   loadSharedDashboard,
@@ -56,6 +57,12 @@ export function DashboardViewer() {
   const [authOpen, setAuthOpen] =
     useState(false);
   const [preferMobile, setPreferMobile] =
+    useState(false);
+  const [actionsOpen, setActionsOpen] =
+    useState(false);
+  const [actionMessage, setActionMessage] =
+    useState<string>();
+  const [deleting, setDeleting] =
     useState(false);
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
     useState<string>();
@@ -300,7 +307,83 @@ export function DashboardViewer() {
     );
   }
 
+  async function shareCurrentDashboard() {
+    if (!dashboard) {
+      return;
+    }
+
+    const url = window.location.href;
+    setActionMessage(undefined);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: dashboard.name,
+          url,
+        });
+        setActionMessage(
+          "Share menu opened.",
+        );
+        return;
+      }
+
+      await navigator.clipboard.writeText(url);
+      setActionMessage(
+        "Dashboard link copied.",
+      );
+    } catch (caught) {
+      if (
+        caught instanceof DOMException &&
+        caught.name === "AbortError"
+      ) {
+        return;
+      }
+
+      setActionMessage(
+        "Unable to share this link.",
+      );
+    } finally {
+      setActionsOpen(false);
+    }
+  }
+
+  async function deleteCurrentDashboard() {
+    if (viewerSource.kind !== "cloud") {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete "${dashboard?.name ?? "this dashboard"}"? This cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setActionMessage(undefined);
+
+    try {
+      await deleteCloudDashboard(
+        viewerSource.id,
+      );
+      window.location.assign(
+        "/dashboards",
+      );
+    } catch (caught) {
+      setDeleting(false);
+      setActionsOpen(false);
+      setActionMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to delete the dashboard.",
+      );
+    }
+  }
+
   const editHref = getEditHref(viewerSource);
+  const sessionsHref =
+    getSessionsHref(primaryWeatherSource);
 
   if (status === "loading") {
     return (
@@ -375,12 +458,124 @@ export function DashboardViewer() {
         backgroundPosition: "center",
       }}
     >
-      <Link
-        href={editHref}
-        className="fixed right-3 top-3 z-50 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
-      >
-        Edit
-      </Link>
+      {actionsOpen ? (
+        <button
+          type="button"
+          aria-label="Close dashboard actions"
+          onClick={() =>
+            setActionsOpen(false)
+          }
+          className="fixed inset-0 z-[870] bg-transparent"
+        />
+      ) : null}
+
+      <div className="fixed right-3 top-3 z-[900] flex items-center rounded-xl border border-[var(--border)] bg-white/95 shadow-md backdrop-blur">
+        <Link
+          href={editHref}
+          aria-label="Edit dashboard"
+          title="Edit dashboard"
+          className="flex h-10 w-11 items-center justify-center rounded-l-xl hover:bg-[var(--surface-muted)]"
+        >
+          <EditIcon />
+        </Link>
+
+        <div className="relative border-l border-[var(--border)]">
+          <button
+            type="button"
+            aria-label="Dashboard actions"
+            aria-expanded={actionsOpen}
+            onClick={() =>
+              setActionsOpen(
+                (current) => !current,
+              )
+            }
+            className="flex h-10 w-11 items-center justify-center rounded-r-xl text-xl font-semibold tracking-[0.08em] hover:bg-[var(--surface-muted)]"
+          >
+            •••
+          </button>
+
+          {actionsOpen ? (
+            <div className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-1.5 text-[var(--foreground)] shadow-2xl">
+              {viewerSource.kind ===
+              "local" ? (
+                <ActionLink
+                  href="/build"
+                  icon="↗"
+                  label="Save URL to share"
+                  detail="Create a shareable dashboard link"
+                />
+              ) : (
+                <ActionButton
+                  icon="↑"
+                  label={
+                    viewerSource.kind ===
+                    "shared"
+                      ? "Share dashboard"
+                      : "Share account link"
+                  }
+                  detail={
+                    viewerSource.kind ===
+                    "shared"
+                      ? "Share this public dashboard URL"
+                      : "This link still requires your account"
+                  }
+                  onClick={() =>
+                    void shareCurrentDashboard()
+                  }
+                />
+              )}
+
+              <ActionLink
+                href={sessionsHref}
+                icon="🎣"
+                label="Sessions"
+                detail="Start or review fishing sessions"
+              />
+
+              <ActionLink
+                href="/sessions"
+                icon="▧"
+                label="Catch photos"
+                detail="Photos are stored with your sessions"
+              />
+
+              <ActionLink
+                href="/dashboards"
+                icon="▦"
+                label="My dashboards"
+                detail="Open your saved dashboards"
+              />
+
+              {viewerSource.kind ===
+              "cloud" ? (
+                <>
+                  <div className="my-1 border-t border-[var(--border)]" />
+                  <ActionButton
+                    icon="⌫"
+                    label={
+                      deleting
+                        ? "Deleting…"
+                        : "Delete dashboard"
+                    }
+                    detail="Remove this saved dashboard"
+                    danger
+                    disabled={deleting}
+                    onClick={() =>
+                      void deleteCurrentDashboard()
+                    }
+                  />
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {actionMessage ? (
+        <div className="fixed bottom-4 left-1/2 z-[910] -translate-x-1/2 rounded-full border border-[var(--border)] bg-white px-4 py-2 text-xs shadow-lg">
+          {actionMessage}
+        </div>
+      ) : null}
 
       <DashboardStage
         dashboard={dashboard}
@@ -430,6 +625,104 @@ function ViewerMessage({
   );
 }
 
+function ActionLink({
+  href,
+  icon,
+  label,
+  detail,
+}: {
+  href: string;
+  icon: string;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-[var(--surface-muted)]"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center text-lg">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">
+          {label}
+        </span>
+        <span className="block text-xs text-[var(--muted)]">
+          {detail}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+function ActionButton({
+  icon,
+  label,
+  detail,
+  onClick,
+  danger = false,
+  disabled = false,
+}: {
+  icon: string;
+  label: string;
+  detail: string;
+  onClick: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={[
+        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left disabled:opacity-50",
+        danger
+          ? "text-red-700 hover:bg-red-50"
+          : "hover:bg-[var(--surface-muted)]",
+      ].join(" ")}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center text-lg">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">
+          {label}
+        </span>
+        <span
+          className={[
+            "block text-xs",
+            danger
+              ? "text-red-500"
+              : "text-[var(--muted)]",
+          ].join(" ")}
+        >
+          {detail}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 function getEditHref(
   source: ViewerSource,
 ): string {
@@ -446,6 +739,26 @@ function getEditHref(
   }
 
   return "/build";
+}
+
+function getSessionsHref(
+  source?: DashboardSource,
+): string {
+  if (
+    !source ||
+    typeof source.latitude !== "number" ||
+    typeof source.longitude !== "number"
+  ) {
+    return "/sessions";
+  }
+
+  return `/sessions?latitude=${encodeURIComponent(
+    source.latitude,
+  )}&longitude=${encodeURIComponent(
+    source.longitude,
+  )}&label=${encodeURIComponent(
+    source.label,
+  )}`;
 }
 
 function dateKeyInTimezone(
