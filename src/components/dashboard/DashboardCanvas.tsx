@@ -25,6 +25,7 @@ import type {
 import type { ForecastContext } from "@/types/forecast";
 import type { WeatherSourceStateMap } from "@/types/weather";
 import { getLayoutContentHeight } from "@/lib/layout-measurements";
+import { getWidgetDefinition } from "@/widgets/registry";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 import { WidgetShell } from "@/components/dashboard/WidgetShell";
 
@@ -223,16 +224,38 @@ export function DashboardCanvas({
             );
           }
 
-          const source =
+          const definition =
+            getWidgetDefinition(widget.widgetKey);
+
+          const configuredSource =
             sources.find(
               (item) =>
                 item.id === widget.sourceId,
-            ) ?? sources[0];
+            );
+
+          /*
+           * Saved dashboards can outlive a source ID when
+           * sources are replaced or migrated. Never fall
+           * back to sources[0], because that can bind a tide
+           * widget to weather data (or any other wrong kind).
+           * Prefer the configured source only when its kind
+           * matches the widget, otherwise select the first
+           * compatible source.
+           */
+          const source =
+            configuredSource?.kind ===
+            definition.sourceKind
+              ? configuredSource
+              : sources.find(
+                  (item) =>
+                    item.kind ===
+                    definition.sourceKind,
+                );
 
           if (!source) {
             return (
               <div key={placement.widgetId}>
-                Missing source
+                Missing {definition.sourceKind} source
               </div>
             );
           }
