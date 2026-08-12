@@ -21,7 +21,7 @@ import { DashboardCanvas } from "@/components/dashboard/DashboardCanvas";
 
 export type PreviewZoom = "fit" | 0.5 | 0.75 | 1;
 
-const FIT_PADDING = 72;
+const FIT_PADDING = 32;
 const SCALE_PRECISION = 1000;
 
 export function BuilderPreview({
@@ -142,7 +142,7 @@ export function BuilderPreview({
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-white px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-white px-3 py-2">
         <div>
           <p className="text-sm font-medium">
             {layout.name} preview
@@ -208,14 +208,14 @@ export function BuilderPreview({
 
       <div
         ref={stageRef}
-        className="builder-scrollbar relative min-h-[520px] flex-1 overflow-auto bg-[#e8eef0]"
+        className="builder-scrollbar relative min-h-[560px] flex-1 overflow-auto bg-[#e8eef0]"
         style={{
           scrollbarGutter: "stable both-edges",
           overflowAnchor: "none",
           overscrollBehavior: "contain",
         }}
       >
-        <div className="flex min-h-full min-w-full items-start justify-center p-9">
+        <div className="flex min-h-full min-w-full items-start justify-center p-4 sm:p-5">
           <div
             className="shrink-0"
             style={{

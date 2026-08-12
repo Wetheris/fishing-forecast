@@ -41,7 +41,10 @@ import {
   BuilderToolbar,
   type BuilderPanel,
 } from "@/components/builder/BuilderToolbar";
-import { DashboardStage } from "@/components/dashboard/DashboardStage";
+import {
+  BuilderPreview,
+  type PreviewZoom,
+} from "@/components/builder/BuilderPreview";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { SaveOptionsDialog } from "@/components/auth/SaveOptionsDialog";
@@ -70,6 +73,10 @@ export function DashboardBuilder() {
     useState<BuilderPanel>("layouts");
   const [selectedWidgetId, setSelectedWidgetId] =
     useState<string>();
+  const [mode, setMode] =
+    useState<"edit" | "view">("edit");
+  const [zoom, setZoom] =
+    useState<PreviewZoom>("fit");
   const [showGrid, setShowGrid] =
     useState(false);
   const [editorOpen, setEditorOpen] =
@@ -567,6 +574,7 @@ export function DashboardBuilder() {
     }));
     setActiveLayoutId(layout.id);
     setPanel("layouts");
+    setZoom("fit");
   }
 
   function deleteLayout(
@@ -1221,264 +1229,160 @@ export function DashboardBuilder() {
   }
 
   return (
-    <main
-      className="dashboard-theme min-h-screen text-[var(--foreground)]"
-      data-theme={dashboard.theme}
-      style={{
-        backgroundColor:
-          "var(--dashboard-background, var(--background))",
-        backgroundImage:
-          "var(--dashboard-pattern, none)",
-        backgroundSize:
-          "var(--dashboard-pattern-size, auto)",
-        backgroundPosition:
-          "center",
-      }}
-    >
-      <DashboardStage
-        dashboard={dashboard}
-        layout={activeLayout}
-        subtitle={
-          primaryWeatherSource?.label
-        }
-        weatherStates={weatherStates}
-        tideStates={tideStates}
-        marineStates={marineStates}
-        astronomyStates={
-          astronomyStates
-        }
-        radarStates={radarStates}
-        forecastContext={
-          forecastContext
-        }
-        onForecastDateChange={
-          setSelectedForecastDateOverride
-        }
-        onWidgetSettingsChange={
-          updateWidgetSettings
-        }
-        mode="edit"
-        showGrid={showGrid}
-        selectedWidgetId={
-          selectedWidgetId
-        }
-        onSelectWidget={
-          selectWidget
-        }
-        onPlacementsChange={
-          updatePlacements
-        }
-      />
-
-      <div className="fixed left-3 top-3 z-[70] flex items-center gap-2">
+    <main className="flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--surface-muted)]">
+      <header className="relative z-50 flex shrink-0 items-center gap-2 border-b border-[var(--border)] bg-white px-3 py-2 sm:px-4">
         <button
           type="button"
           onClick={() =>
-            setEditorOpen(
-              (current) =>
-                !current,
-            )
+            setEditorOpen((current) => !current)
           }
-          className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm font-medium shadow-sm hover:bg-[var(--surface-muted)]"
+          className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
         >
-          {editorOpen
-            ? "Hide tools"
-            : "Edit tools"}
+          {editorOpen ? "Hide tools" : "Tools"}
         </button>
 
-        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium shadow-sm">
-          {activeLayout.device ===
-          "mobile"
-            ? "Mobile"
-            : "Desktop"}
-        </span>
-      </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">
+            {dashboard.name}
+          </p>
+          <p className="text-xs text-[var(--muted)]">
+            Editing {activeLayout.device === "mobile" ? "mobile" : "desktop"} layout
+          </p>
+        </div>
 
-      <div className="fixed right-3 top-3 z-[70]">
         <button
           type="button"
-          onClick={() =>
-            void handleDone()
-          }
-          disabled={
-            finishing ||
-            saveState === "saving"
-          }
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-60"
+          onClick={() => void handleDone()}
+          disabled={finishing || saveState === "saving"}
+          className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          {finishing ||
-          saveState === "saving"
+          {finishing || saveState === "saving"
             ? "Saving…"
             : "Done"}
         </button>
+      </header>
+
+      <div className="min-h-0 flex-1">
+        <BuilderPreview
+          layout={activeLayout}
+          theme={dashboard.theme}
+          widgets={dashboard.widgets}
+          sources={dashboard.sources}
+          weatherStates={weatherStates}
+          tideStates={tideStates}
+          marineStates={marineStates}
+          astronomyStates={astronomyStates}
+          radarStates={radarStates}
+          forecastContext={forecastContext}
+          onForecastDateChange={
+            setSelectedForecastDateOverride
+          }
+          onWidgetSettingsChange={
+            updateWidgetSettings
+          }
+          mode={mode}
+          zoom={zoom}
+          showGrid={showGrid}
+          selectedWidgetId={selectedWidgetId}
+          onModeChange={setMode}
+          onZoomChange={setZoom}
+          onShowGridChange={setShowGrid}
+          onSelectWidget={selectWidget}
+          onPlacementsChange={updatePlacements}
+        />
       </div>
 
       {editorOpen ? (
-        <section className="fixed inset-x-0 bottom-0 z-[60] flex h-[72vh] flex-col overflow-hidden rounded-t-2xl border border-[var(--border)] bg-white shadow-2xl lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-16 lg:h-auto lg:w-[390px] lg:rounded-2xl">
-          <header className="border-b border-[var(--border)] bg-white p-3">
-            <div className="flex items-center gap-2">
-              <input
-                aria-label="Dashboard name"
-                value={dashboard.name}
-                onChange={(event) =>
-                  updateDashboardName(
-                    event.target.value,
-                  )
-                }
-                className="min-w-0 flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setEditorOpen(false)
-                }
-                className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
-                aria-label="Close editor tools"
-              >
-                Close
-              </button>
-            </div>
+        <>
+          <button
+            type="button"
+            aria-label="Close editor tools"
+            onClick={() => setEditorOpen(false)}
+            className="fixed inset-0 z-[60] bg-black/25 lg:hidden"
+          />
 
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={
-                  saveState ===
-                  "saving"
-                }
-                className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={
-                  handleOpenUrlSave
-                }
-                disabled={
-                  savingSharedUrl
-                }
-                className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
-              >
-                Save URL
-              </button>
-              <label className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs">
+          <aside className="fixed inset-y-0 left-0 z-[70] flex w-[88vw] max-w-[380px] flex-col border-r border-[var(--border)] bg-white shadow-2xl sm:w-[380px]">
+            <header className="shrink-0 border-b border-[var(--border)] p-3">
+              <div className="flex items-center gap-2">
                 <input
-                  type="checkbox"
-                  checked={showGrid}
+                  aria-label="Dashboard name"
+                  value={dashboard.name}
                   onChange={(event) =>
-                    setShowGrid(
-                      event.target
-                        .checked,
-                    )
+                    updateDashboardName(event.target.value)
                   }
+                  className="min-w-0 flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium"
                 />
-                Grid
-              </label>
-              <div className="ml-auto">
-                <AccountMenu />
+                <button
+                  type="button"
+                  onClick={() => setEditorOpen(false)}
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-sm"
+                >
+                  Close
+                </button>
               </div>
-            </div>
-          </header>
 
-          <div className="min-h-0 flex-1">
-            <BuilderToolbar
-              panel={panel}
-              onPanelChange={
-                setPanel
-              }
-              layouts={
-                dashboard.layouts
-              }
-              activeLayout={
-                activeLayout
-              }
-              theme={
-                dashboard.theme
-              }
-              widgets={
-                dashboard.widgets
-              }
-              sources={
-                dashboard.sources
-              }
-              weatherStates={
-                weatherStates
-              }
-              tideStates={
-                tideStates
-              }
-              marineStates={
-                marineStates
-              }
-              astronomyStates={
-                astronomyStates
-              }
-              radarStates={
-                radarStates
-              }
-              selectedWidget={
-                selectedWidget
-              }
-              selectedPlacement={
-                selectedPlacement
-              }
-              onSelectLayout={(
-                layoutId,
-              ) => {
-                setActiveLayoutId(
-                  layoutId,
-                );
-                setSelectedWidgetId(
-                  undefined,
-                );
-              }}
-              onCreateLayout={
-                createLayout
-              }
-              onDeleteLayout={
-                deleteLayout
-              }
-              onApplyLayoutPreset={
-                applyLayoutPreset
-              }
-              onUpdateLayout={
-                updateLayout
-              }
-              onResetLayout={
-                resetLayout
-              }
-              onThemeChange={
-                updateDashboardTheme
-              }
-              onAddWidget={
-                addWidget
-              }
-              onWeatherLocationChange={
-                updateWeatherLocation
-              }
-              onAddTideSource={
-                addTideSource
-              }
-              onRemoveSource={
-                removeSource
-              }
-              onUpdateWidget={
-                updateSelectedWidget
-              }
-              onUpdatePlacement={
-                updateSelectedPlacement
-              }
-              onDuplicateWidget={
-                duplicateSelectedWidget
-              }
-              onRemoveWidget={
-                removeSelectedWidget
-              }
-            />
-          </div>
-        </section>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saveState === "saving"}
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenUrlSave}
+                  disabled={savingSharedUrl}
+                  className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)] disabled:opacity-60"
+                >
+                  Save URL
+                </button>
+                <div className="ml-auto">
+                  <AccountMenu />
+                </div>
+              </div>
+            </header>
+
+            <div className="min-h-0 flex-1">
+              <BuilderToolbar
+                panel={panel}
+                onPanelChange={setPanel}
+                layouts={dashboard.layouts}
+                activeLayout={activeLayout}
+                theme={dashboard.theme}
+                widgets={dashboard.widgets}
+                sources={dashboard.sources}
+                weatherStates={weatherStates}
+                tideStates={tideStates}
+                marineStates={marineStates}
+                astronomyStates={astronomyStates}
+                radarStates={radarStates}
+                selectedWidget={selectedWidget}
+                selectedPlacement={selectedPlacement}
+                onSelectLayout={(layoutId) => {
+                  setActiveLayoutId(layoutId);
+                  setSelectedWidgetId(undefined);
+                  setZoom("fit");
+                }}
+                onCreateLayout={createLayout}
+                onDeleteLayout={deleteLayout}
+                onApplyLayoutPreset={applyLayoutPreset}
+                onUpdateLayout={updateLayout}
+                onResetLayout={resetLayout}
+                onThemeChange={updateDashboardTheme}
+                onAddWidget={addWidget}
+                onWeatherLocationChange={updateWeatherLocation}
+                onAddTideSource={addTideSource}
+                onRemoveSource={removeSource}
+                onUpdateWidget={updateSelectedWidget}
+                onUpdatePlacement={updateSelectedPlacement}
+                onDuplicateWidget={duplicateSelectedWidget}
+                onRemoveWidget={removeSelectedWidget}
+              />
+            </div>
+          </aside>
+        </>
       ) : null}
 
       {saveMessage ? (
@@ -1496,39 +1400,20 @@ export function DashboardBuilder() {
       ) : null}
 
       <SaveOptionsDialog
-        open={
-          saveOptionsMode !== null
-        }
-        mode={
-          saveOptionsMode ??
-          "guest"
-        }
-        savingUrl={
-          savingSharedUrl
-        }
+        open={saveOptionsMode !== null}
+        mode={saveOptionsMode ?? "guest"}
+        savingUrl={savingSharedUrl}
         sharedUrl={sharedUrl}
-        expiresAt={
-          sharedExpiresAt
-        }
-        error={
-          sharedSaveError
-        }
-        onClose={() =>
-          setSaveOptionsMode(null)
-        }
-        onSaveToAccount={
-          handleAccountSaveFromOptions
-        }
-        onSaveToUrl={() =>
-          void handleSaveToUrl()
-        }
+        expiresAt={sharedExpiresAt}
+        error={sharedSaveError}
+        onClose={() => setSaveOptionsMode(null)}
+        onSaveToAccount={handleAccountSaveFromOptions}
+        onSaveToUrl={() => void handleSaveToUrl()}
       />
 
       <AuthDialog
         open={authOpen}
-        onClose={() =>
-          setAuthOpen(false)
-        }
+        onClose={() => setAuthOpen(false)}
         initialMode="signup"
         intent="Save your dashboard"
       />
