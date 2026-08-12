@@ -170,7 +170,7 @@ export async function collectSessionConditions({
           }
         : undefined,
     tide:
-      tide && station
+      tide && station && tidePoint
         ? {
             stationId: tide.station.id,
             stationName: tide.station.name,

@@ -102,7 +102,6 @@ export function hasPendingCloudSave():
   );
 }
 
-
 export type SharedDashboardSaveResult = {
   shareToken: string;
   expiresAt: string;
@@ -142,49 +141,66 @@ export async function saveSharedDashboard({
   const supabase =
     getRequiredSupabaseClient();
 
+  /*
+   * Supplying an existing token means this is strictly an update.
+   * Never silently fall through to create_shared_dashboard(), because
+   * doing so changes the user's public URL without their permission.
+   */
   if (existingShareToken) {
     const editToken = getSharedEditToken(
       existingShareToken,
     );
 
-    if (editToken) {
-      const {
-        data,
-        error,
-      } = await supabase
-        .rpc("update_shared_dashboard", {
-          p_share_token:
-            existingShareToken,
-          p_edit_token: editToken,
-          p_name: dashboard.name,
-          p_dashboard_data: dashboard,
-          p_schema_version: 1,
-        })
-        .maybeSingle();
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const updatedRow =
-        data as
-          | UpdateSharedDashboardRpcRow
-          | null;
-
-      if (updatedRow) {
-        return {
-          shareToken: String(
-            updatedRow.share_token,
-          ),
-          expiresAt: String(
-            updatedRow.expires_at,
-          ),
-          updatedExisting: true,
-        };
-      }
+    if (!editToken) {
+      throw new Error(
+        "This browser no longer has permission to update the existing saved dashboard URL. A new URL was not created.",
+      );
     }
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .rpc("update_shared_dashboard", {
+        p_share_token:
+          existingShareToken,
+        p_edit_token: editToken,
+        p_name: dashboard.name,
+        p_dashboard_data: dashboard,
+        p_schema_version: 1,
+      })
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const updatedRow =
+      data as
+        | UpdateSharedDashboardRpcRow
+        | null;
+
+    if (!updatedRow) {
+      throw new Error(
+        "The existing saved dashboard URL could not be updated. A new URL was not created.",
+      );
+    }
+
+    return {
+      shareToken: String(
+        updatedRow.share_token,
+      ),
+      expiresAt: String(
+        updatedRow.expires_at,
+      ),
+      updatedExisting: true,
+    };
   }
 
+  /*
+   * A new shared URL is created only when the caller did not supply
+   * an existing share token.
+   */
   const {
     data,
     error,
