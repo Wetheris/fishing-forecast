@@ -2,6 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { normalizeCatchPhoto } from "@/lib/photo-stamp";
 import type {
   CatchDraft,
   FishingCatch,
@@ -271,25 +272,32 @@ export async function createFishingCatch({
 
   try {
     if (originalPhoto) {
-      const extension =
-        fileExtension(originalPhoto.name) ||
-        extensionFromMime(
-          originalPhoto.type,
-        ) ||
-        "jpg";
+      let uploadPhoto: File;
+
+      try {
+        uploadPhoto =
+          await normalizeCatchPhoto(
+            originalPhoto,
+          );
+      } catch (error) {
+        console.warn(
+          "Unable to normalize catch photo; skipping photo upload",
+          error,
+        );
+        return catchId;
+      }
+
       originalPhotoPath =
-        `${user.id}/${sessionId}/${catchId}/original.${extension}`;
+        `${user.id}/${sessionId}/${catchId}/original.jpg`;
 
       const { error } =
         await supabase.storage
           .from(PHOTO_BUCKET)
           .upload(
             originalPhotoPath,
-            originalPhoto,
+            uploadPhoto,
             {
-              contentType:
-                originalPhoto.type ||
-                "image/jpeg",
+              contentType: "image/jpeg",
               upsert: false,
             },
           );
@@ -343,9 +351,8 @@ export async function createFishingCatch({
     }
   } catch (error) {
     /*
-     * Do not leave a catch that looks successfully saved
-     * when its requested photo failed. Clean up the partial
-     * files and row so retrying cannot create a duplicate.
+     * A photo problem must not erase a successfully logged catch.
+     * Remove partial files, but leave the catch record intact.
      */
     const uploadedPaths = [
       originalPhotoPath,
@@ -361,16 +368,10 @@ export async function createFishingCatch({
         .remove(uploadedPaths);
     }
 
-    await supabase
-      .from("fishing_catches")
-      .delete()
-      .eq("id", catchId);
-
     console.error(
-      "Catch photo upload failed",
+      "Catch photo upload failed; catch retained without photo",
       error,
     );
-    throw error;
   }
 
   return catchId;
@@ -475,37 +476,6 @@ function mapCatchRow(
         : String(row.stamped_photo_path),
     createdAt: String(row.created_at),
   };
-}
-
-function fileExtension(
-  name: string,
-): string | null {
-  const match =
-    /\.([a-zA-Z0-9]{2,5})$/.exec(name);
-
-  return match?.[1]?.toLowerCase() ?? null;
-}
-
-function extensionFromMime(
-  type: string,
-): string | null {
-  if (type === "image/png") {
-    return "png";
-  }
-  if (
-    type === "image/heic" ||
-    type === "image/heif"
-  ) {
-    return "heic";
-  }
-  if (
-    type === "image/jpeg" ||
-    type === "image/jpg"
-  ) {
-    return "jpg";
-  }
-
-  return null;
 }
 
 function getRequiredSupabaseClient() {
