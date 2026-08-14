@@ -174,7 +174,7 @@ export function MainMenu() {
             <aside className="fixed inset-y-0 left-0 z-[940] flex w-[88vw] max-w-sm flex-col border-r border-[var(--border)] bg-white shadow-2xl">
               <header className="shrink-0 border-b border-[var(--border)] py-5 pl-16 pr-5">
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
-                  Fishing Forecast
+                  TideHawk
                 </p>
                 <h2 className="mt-1 text-xl font-semibold">
                   Menu

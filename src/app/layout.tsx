@@ -8,11 +8,11 @@ import { MainMenu } from "@/components/navigation/MainMenu";
 
 export const metadata: Metadata = {
   title: {
-    default: "Fishing Forecast",
-    template: "%s | Fishing Forecast",
+    default: "TideHawk",
+    template: "%s | TideHawk",
   },
   description:
-    "Build a customizable fishing dashboard with weather, wind, tides, waves, moon, and sun widgets.",
+    "TideHawk is a customizable fishing dashboard for weather, wind, tides, waves, moon, sun, fishing sessions, and catches.",
 };
 
 export default function RootLayout({
