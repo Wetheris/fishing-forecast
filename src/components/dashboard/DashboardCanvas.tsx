@@ -316,6 +316,7 @@ export function DashboardCanvas({
                     onForecastDateChange
                   }
                   onWidgetSettingsChange={
+                    mode === "edit" &&
                     onWidgetSettingsChange
                       ? (settings) =>
                           onWidgetSettingsChange(
@@ -353,9 +354,18 @@ function getEffectiveMinimums(
     ) === "compact";
 
   if (!compact) {
+    const contentMinHeight =
+      widget.widgetKey === "forecast-overview" ||
+      widget.widgetKey === "hourly-forecast"
+        ? 3
+        : standard.minH;
+
     return {
       minW: standard.minW,
-      minH: standard.minH,
+      minH: Math.max(
+        standard.minH,
+        contentMinHeight,
+      ),
     };
   }
 
@@ -365,11 +375,16 @@ function getEffectiveMinimums(
   switch (widget.widgetKey) {
     case "forecast-overview":
       return {
-        minW: mobile ? 2 : 3,
-        minH: 2,
+        minW: 4,
+        minH: 3,
       };
 
     case "hourly-forecast":
+      return {
+        minW: mobile ? 2 : 3,
+        minH: 3,
+      };
+
     case "wind-forecast":
     case "tide-timeline":
       return {

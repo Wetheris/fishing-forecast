@@ -42,8 +42,7 @@ type ForecastSummaryMetric =
   | "evening-rain"
   | "wind"
   | "max-gust"
-  | "high-low"
-  | "forecast-hours";
+  | "high-low";
 
 const FORECAST_SUMMARY_OPTIONS: Array<{
   value: ForecastSummaryMetric;
@@ -76,10 +75,6 @@ const FORECAST_SUMMARY_OPTIONS: Array<{
   {
     value: "high-low",
     label: "High / low",
-  },
-  {
-    value: "forecast-hours",
-    label: "Forecast hours",
   },
 ];
 
@@ -118,6 +113,21 @@ export function ForecastOverviewWidget({
       widget.settings,
       "summaryMetric3",
       "max-gust",
+    ),
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric4",
+      "high-low",
+    ),
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric5",
+      "morning-rain",
+    ),
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric6",
+      "evening-rain",
     ),
   ];
 
@@ -199,7 +209,7 @@ export function ForecastOverviewWidget({
 
         if (compact) {
           return (
-            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] items-center gap-2 overflow-hidden">
+            <div className="grid h-full min-h-0 grid-cols-[minmax(110px,1.2fr)_minmax(0,2fr)] items-center gap-3 overflow-hidden">
               <div className="min-w-0">
                 <ForecastDaySelector
                   daily={data.daily}
@@ -225,36 +235,38 @@ export function ForecastOverviewWidget({
                 </p>
               </div>
 
-              {summaryItems.map(
-                (item, index) => (
-                  <SummaryValue
-                    key={`${index}-${summaryMetrics[index]}`}
-                    label={item.label}
-                    value={item.value}
-                    metric={
-                      summaryMetrics[index]
-                    }
-                    editable={
-                      Boolean(
-                        onWidgetSettingsChange,
-                      )
-                    }
-                    onMetricChange={(metric) =>
-                      changeSummaryMetric(
-                        index,
-                        metric,
-                      )
-                    }
-                  />
-                ),
-              )}
+              <div className="grid min-w-0 grid-cols-3 gap-x-2 gap-y-2">
+                {summaryItems.map(
+                  (item, index) => (
+                    <SummaryValue
+                      key={`${index}-${summaryMetrics[index]}`}
+                      label={item.label}
+                      value={item.value}
+                      metric={
+                        summaryMetrics[index]
+                      }
+                      editable={
+                        Boolean(
+                          onWidgetSettingsChange,
+                        )
+                      }
+                      onMetricChange={(metric) =>
+                        changeSummaryMetric(
+                          index,
+                          metric,
+                        )
+                      }
+                    />
+                  ),
+                )}
+              </div>
             </div>
           );
         }
 
         return (
-          <div className="flex h-full min-h-0 flex-wrap items-center gap-x-6 gap-y-3 overflow-hidden">
-            <div className="flex min-w-[190px] flex-[1_1_260px] items-center gap-4 overflow-hidden">
+          <div className="grid h-full min-h-0 grid-cols-[minmax(240px,0.9fr)_minmax(0,2fr)] items-center gap-6 overflow-hidden">
+            <div className="flex min-w-0 items-center gap-4 overflow-hidden">
               <WeatherConditionIcon
                 weatherCode={day.weatherCode}
                 condition={day.condition}
@@ -291,10 +303,10 @@ export function ForecastOverviewWidget({
               </div>
             </div>
 
-            <div className="grid min-w-[190px] flex-[1_1_260px] content-center gap-1 overflow-hidden">
+            <div className="grid min-w-0 grid-cols-3 content-center gap-x-5 gap-y-4 overflow-hidden">
               {summaryItems.map(
                 (item, index) => (
-                  <SummaryRow
+                  <SummaryValue
                     key={`${index}-${summaryMetrics[index]}`}
                     label={item.label}
                     value={item.value}
@@ -1061,42 +1073,6 @@ function SummaryValue({
   );
 }
 
-function SummaryRow({
-  label,
-  value,
-  metric,
-  editable,
-  onMetricChange,
-}: {
-  label: string;
-  value: string;
-  metric: ForecastSummaryMetric;
-  editable: boolean;
-  onMetricChange: (
-    metric: ForecastSummaryMetric,
-  ) => void;
-}) {
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-[var(--border)] py-2 last:border-b-0">
-      <div className="min-w-0">
-        {editable ? (
-          <SummaryMetricSelect
-            metric={metric}
-            onChange={onMetricChange}
-          />
-        ) : (
-          <p className="truncate text-xs text-[var(--muted)]">
-            {label}
-          </p>
-        )}
-      </div>
-      <p className="shrink-0 text-sm font-medium">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 function SummaryMetricSelect({
   metric,
   onChange,
@@ -1338,12 +1314,6 @@ function getForecastSummaryItem({
       return {
         label: "High / low",
         value: `${high}° / ${low}°${symbol}`,
-      };
-
-    case "forecast-hours":
-      return {
-        label: "Forecast hours",
-        value: `${summary.hours.length} points`,
       };
 
     case "rain-am-pm":
