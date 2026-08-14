@@ -21,6 +21,7 @@ import { formatLocalHour } from "@/lib/date-format";
 import {
   dateKeyFromLocalTime,
   formatCompactForecastDateLabel,
+  formatDate,
   formatForecastDateLabel,
   selectDefaultForecastHours,
   selectExpandedForecastHours,
@@ -34,10 +35,61 @@ import {
 import type { ForecastMetric } from "@/types/forecast";
 import type { WeatherSourceData } from "@/types/weather";
 
+type ForecastSummaryMetric =
+  | "rain-am-pm"
+  | "morning-rain"
+  | "afternoon-rain"
+  | "evening-rain"
+  | "wind"
+  | "max-gust"
+  | "high-low"
+  | "forecast-hours";
+
+const FORECAST_SUMMARY_OPTIONS: Array<{
+  value: ForecastSummaryMetric;
+  label: string;
+}> = [
+  {
+    value: "rain-am-pm",
+    label: "Rain AM / PM",
+  },
+  {
+    value: "morning-rain",
+    label: "Morning rain",
+  },
+  {
+    value: "afternoon-rain",
+    label: "Afternoon rain",
+  },
+  {
+    value: "evening-rain",
+    label: "Evening rain",
+  },
+  {
+    value: "wind",
+    label: "Wind",
+  },
+  {
+    value: "max-gust",
+    label: "Max gust",
+  },
+  {
+    value: "high-low",
+    label: "High / low",
+  },
+  {
+    value: "forecast-hours",
+    label: "Forecast hours",
+  },
+];
+
+
 export function ForecastOverviewWidget({
   widget,
   weatherState,
   forecastContext,
+  onForecastDateChange,
+  onWidgetSettingsChange,
 }: WidgetComponentProps) {
   const unit = stringSetting(
     widget.settings,
@@ -50,6 +102,33 @@ export function ForecastOverviewWidget({
       "density",
       "standard",
     ) === "compact";
+
+  const summaryMetrics: ForecastSummaryMetric[] = [
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric1",
+      "rain-am-pm",
+    ),
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric2",
+      "wind",
+    ),
+    forecastSummaryMetricSetting(
+      widget.settings,
+      "summaryMetric3",
+      "max-gust",
+    ),
+  ];
+
+  function changeSummaryMetric(
+    index: number,
+    metric: ForecastSummaryMetric,
+  ) {
+    onWidgetSettingsChange?.({
+      [`summaryMetric${index + 1}`]: metric,
+    });
+  }
 
   return (
     <WeatherDataView state={weatherState}>
@@ -78,7 +157,8 @@ export function ForecastOverviewWidget({
         const isToday =
           forecastContext.selectedDate ===
           forecastContext.todayDate;
-        const symbol = unit === "celsius" ? "C" : "F";
+        const symbol =
+          unit === "celsius" ? "C" : "F";
         const high = temperatureValue(
           day.temperatureMaxC,
           unit,
@@ -103,18 +183,38 @@ export function ForecastOverviewWidget({
                   summary.maximumGustMps,
                 ),
               )} mph`;
-        const dateLabel = formatForecastDateLabel({
-          date: forecastContext.selectedDate,
-          todayDate: forecastContext.todayDate,
-        });
+
+        const summaryItems =
+          summaryMetrics.map((metric) =>
+            getForecastSummaryItem({
+              metric,
+              summary,
+              high,
+              low,
+              symbol,
+              windRange,
+              maximumGust,
+            }),
+          );
 
         if (compact) {
           return (
-            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] items-center gap-3 overflow-hidden">
+            <div className="grid h-full min-h-0 grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] items-center gap-2 overflow-hidden">
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-                  {dateLabel}
-                </p>
+                <ForecastDaySelector
+                  daily={data.daily}
+                  selectedDate={
+                    forecastContext.selectedDate
+                  }
+                  todayDate={
+                    forecastContext.todayDate
+                  }
+                  onChange={
+                    onForecastDateChange
+                  }
+                  compact
+                />
+
                 <p className="truncate font-semibold">
                   {isToday
                     ? `${current}°${symbol} · ${high}°/${low}°`
@@ -125,42 +225,56 @@ export function ForecastOverviewWidget({
                 </p>
               </div>
 
-              <SummaryValue
-                label="Rain"
-                value={`AM ${formatPercent(
-                  summary.morningRainPercent,
-                )} · PM ${formatPercent(
-                  summary.afternoonRainPercent,
-                )}`}
-              />
-              <SummaryValue
-                label="Wind"
-                value={
-                  summary.dominantWindLabel
-                    ? `${windRange} ${summary.dominantWindLabel}`
-                    : windRange
-                }
-              />
-              <SummaryValue
-                label="Max gust"
-                value={maximumGust}
-              />
+              {summaryItems.map(
+                (item, index) => (
+                  <SummaryValue
+                    key={`${index}-${summaryMetrics[index]}`}
+                    label={item.label}
+                    value={item.value}
+                    metric={
+                      summaryMetrics[index]
+                    }
+                    editable={
+                      Boolean(
+                        onWidgetSettingsChange,
+                      )
+                    }
+                    onMetricChange={(metric) =>
+                      changeSummaryMetric(
+                        index,
+                        metric,
+                      )
+                    }
+                  />
+                ),
+              )}
             </div>
           );
         }
 
         return (
-          <div className="grid h-full min-h-0 gap-4 overflow-hidden md:grid-cols-[minmax(220px,0.8fr)_1.4fr]">
-            <div className="flex min-h-0 items-center gap-4">
+          <div className="flex h-full min-h-0 flex-wrap items-center gap-x-6 gap-y-3 overflow-hidden">
+            <div className="flex min-w-[190px] flex-[1_1_260px] items-center gap-4 overflow-hidden">
               <WeatherConditionIcon
                 weatherCode={day.weatherCode}
                 condition={day.condition}
-                size={84}
+                size={68}
               />
+
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-[var(--accent)]">
-                  {dateLabel}
-                </p>
+                <ForecastDaySelector
+                  daily={data.daily}
+                  selectedDate={
+                    forecastContext.selectedDate
+                  }
+                  todayDate={
+                    forecastContext.todayDate
+                  }
+                  onChange={
+                    onForecastDateChange
+                  }
+                />
+
                 <p className="mt-1 text-3xl font-semibold tracking-tight">
                   {isToday
                     ? `${current}°${symbol}`
@@ -177,42 +291,31 @@ export function ForecastOverviewWidget({
               </div>
             </div>
 
-            <dl className="grid min-h-0 grid-cols-2 content-center gap-x-5 gap-y-3 overflow-hidden sm:grid-cols-3">
-              <SummaryValue
-                label="Morning rain"
-                value={formatPercent(
-                  summary.morningRainPercent,
-                )}
-              />
-              <SummaryValue
-                label="Afternoon rain"
-                value={formatPercent(
-                  summary.afternoonRainPercent,
-                )}
-              />
-              <SummaryValue
-                label="Evening rain"
-                value={formatPercent(
-                  summary.eveningRainPercent,
-                )}
-              />
-              <SummaryValue
-                label="Wind"
-                value={
-                  summary.dominantWindLabel
-                    ? `${windRange} ${summary.dominantWindLabel}`
-                    : windRange
-                }
-              />
-              <SummaryValue
-                label="Maximum gust"
-                value={maximumGust}
-              />
-              <SummaryValue
-                label="Forecast coverage"
-                value={`${summary.hours.length} hourly points`}
-              />
-            </dl>
+            <div className="grid min-w-[190px] flex-[1_1_260px] content-center gap-1 overflow-hidden">
+              {summaryItems.map(
+                (item, index) => (
+                  <SummaryRow
+                    key={`${index}-${summaryMetrics[index]}`}
+                    label={item.label}
+                    value={item.value}
+                    metric={
+                      summaryMetrics[index]
+                    }
+                    editable={
+                      Boolean(
+                        onWidgetSettingsChange,
+                      )
+                    }
+                    onMetricChange={(metric) =>
+                      changeSummaryMetric(
+                        index,
+                        metric,
+                      )
+                    }
+                  />
+                ),
+              )}
+            </div>
           </div>
         );
       }}
@@ -587,7 +690,6 @@ export function HourlyForecastWidget({
                   points={selectedHours.map((hour) => ({
                     label: formatHourLabel(
                       hour.time,
-                      forecastContext.todayDate,
                       forecastContext.selectedDate,
                     ),
                     temperature:
@@ -605,9 +707,6 @@ export function HourlyForecastWidget({
                   hours={selectedHours}
                   metric={metric}
                   unit={unit}
-                  todayDate={
-                    forecastContext.todayDate
-                  }
                   selectedDate={
                     forecastContext.selectedDate
                   }
@@ -752,14 +851,12 @@ function HourlyForecastStrip({
   hours,
   metric,
   unit,
-  todayDate,
   selectedDate,
   compact,
 }: {
   hours: WeatherSourceData["hourly"];
   metric: ForecastMetric;
   unit: string;
-  todayDate: string;
   selectedDate: string;
   compact: boolean;
 }) {
@@ -783,18 +880,27 @@ function HourlyForecastStrip({
             compact ? "px-1 py-0.5" : "p-3",
           ].join(" ")}
         >
-          <p
-            className={[
-              "truncate text-[var(--muted)]",
-              compact ? "text-[10px]" : "text-xs",
-            ].join(" ")}
-          >
-            {formatHourLabel(
-              hour.time,
-              todayDate,
-              selectedDate,
-            )}
-          </p>
+          {compact ? (
+            <div className="text-[10px] leading-tight text-[var(--muted)]">
+              <p className="whitespace-nowrap">
+                {formatShortNumericDate(
+                  dateKeyFromLocalTime(
+                    hour.time,
+                  ),
+                )}
+              </p>
+              <p className="mt-0.5 whitespace-nowrap">
+                {formatLocalHour(hour.time)}
+              </p>
+            </div>
+          ) : (
+            <p className="truncate text-xs text-[var(--muted)]">
+              {formatHourLabel(
+                hour.time,
+                selectedDate,
+              )}
+            </p>
+          )}
 
           {metric === "temperature" ? (
             <>
@@ -921,20 +1027,336 @@ function MetricTab({
 function SummaryValue({
   label,
   value,
+  metric,
+  editable,
+  onMetricChange,
 }: {
   label: string;
   value: string;
+  metric?: ForecastSummaryMetric;
+  editable?: boolean;
+  onMetricChange?: (
+    metric: ForecastSummaryMetric,
+  ) => void;
 }) {
   return (
     <div className="min-w-0">
-      <dt className="truncate text-xs text-[var(--muted)]">
-        {label}
-      </dt>
-      <dd className="mt-1 truncate text-sm font-medium">
+      {editable &&
+      metric &&
+      onMetricChange ? (
+        <SummaryMetricSelect
+          metric={metric}
+          onChange={onMetricChange}
+          compact
+        />
+      ) : (
+        <p className="truncate text-xs text-[var(--muted)]">
+          {label}
+        </p>
+      )}
+      <p className="mt-1 truncate text-sm font-medium">
         {value}
-      </dd>
+      </p>
     </div>
   );
+}
+
+function SummaryRow({
+  label,
+  value,
+  metric,
+  editable,
+  onMetricChange,
+}: {
+  label: string;
+  value: string;
+  metric: ForecastSummaryMetric;
+  editable: boolean;
+  onMetricChange: (
+    metric: ForecastSummaryMetric,
+  ) => void;
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3 border-b border-[var(--border)] py-2 last:border-b-0">
+      <div className="min-w-0">
+        {editable ? (
+          <SummaryMetricSelect
+            metric={metric}
+            onChange={onMetricChange}
+          />
+        ) : (
+          <p className="truncate text-xs text-[var(--muted)]">
+            {label}
+          </p>
+        )}
+      </div>
+      <p className="shrink-0 text-sm font-medium">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SummaryMetricSelect({
+  metric,
+  onChange,
+  compact = false,
+}: {
+  metric: ForecastSummaryMetric;
+  onChange: (
+    metric: ForecastSummaryMetric,
+  ) => void;
+  compact?: boolean;
+}) {
+  return (
+    <select
+      value={metric}
+      aria-label="Forecast summary detail"
+      onChange={(event) =>
+        onChange(
+          event.target
+            .value as ForecastSummaryMetric,
+        )
+      }
+      className={[
+        "max-w-full cursor-pointer rounded-md border border-transparent bg-transparent text-[var(--muted)] outline-none hover:border-[var(--border)] hover:bg-[var(--surface-muted)]",
+        compact
+          ? "text-[10px]"
+          : "text-xs",
+      ].join(" ")}
+    >
+      {FORECAST_SUMMARY_OPTIONS.map(
+        (option) => (
+          <option
+            key={option.value}
+            value={option.value}
+          >
+            {option.label}
+          </option>
+        ),
+      )}
+    </select>
+  );
+}
+
+function ForecastDaySelector({
+  daily,
+  selectedDate,
+  todayDate,
+  onChange,
+  compact = false,
+}: {
+  daily: WeatherSourceData["daily"];
+  selectedDate: string;
+  todayDate: string;
+  onChange?: (date: string) => void;
+  compact?: boolean;
+}) {
+  const label = formatForecastDateLabel({
+    date: selectedDate,
+    todayDate,
+  });
+
+  if (!onChange) {
+    return (
+      <p
+        className={[
+          "font-medium uppercase tracking-wide text-[var(--accent)]",
+          compact
+            ? "truncate text-xs"
+            : "text-xs",
+        ].join(" ")}
+      >
+        {label}
+      </p>
+    );
+  }
+
+  return (
+    <label
+      className={[
+        "relative inline-flex max-w-full cursor-pointer items-center gap-1 rounded-md font-medium uppercase tracking-wide text-[var(--accent)] hover:bg-[var(--selection)]",
+        compact
+          ? "px-0.5 py-0.5 text-xs"
+          : "-ml-1 px-1 py-0.5 text-xs",
+      ].join(" ")}
+      title="Choose forecast day"
+    >
+      <span className="truncate">
+        {label}
+      </span>
+      <svg
+        viewBox="0 0 16 16"
+        className="h-3 w-3 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m4 6 4 4 4-4" />
+      </svg>
+
+      <select
+        value={selectedDate}
+        aria-label="Choose forecast day"
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+        className="absolute inset-0 cursor-pointer opacity-0"
+      >
+        {daily.map((day) => (
+          <option
+            key={day.date}
+            value={day.date}
+          >
+            {formatForecastDayOption(
+              day.date,
+              todayDate,
+            )}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function formatForecastDayOption(
+  date: string,
+  todayDate: string,
+): string {
+  const label = formatForecastDateLabel({
+    date,
+    todayDate,
+  });
+  const numeric =
+    formatShortNumericDate(date);
+
+  if (
+    label === "Today" ||
+    label === "Tomorrow"
+  ) {
+    return `${label} · ${numeric}`;
+  }
+
+  return `${formatDate(date, {
+    weekday: "short",
+  })} · ${numeric}`;
+}
+
+function formatShortNumericDate(
+  date: string,
+): string {
+  return formatDate(date, {
+    month: "numeric",
+    day: "numeric",
+  });
+}
+
+function forecastSummaryMetricSetting(
+  settings: Record<string, unknown>,
+  key: string,
+  fallback: ForecastSummaryMetric,
+): ForecastSummaryMetric {
+  const value = stringSetting(
+    settings,
+    key,
+    fallback,
+  );
+
+  return FORECAST_SUMMARY_OPTIONS.some(
+    (option) => option.value === value,
+  )
+    ? (value as ForecastSummaryMetric)
+    : fallback;
+}
+
+function getForecastSummaryItem({
+  metric,
+  summary,
+  high,
+  low,
+  symbol,
+  windRange,
+  maximumGust,
+}: {
+  metric: ForecastSummaryMetric;
+  summary: ReturnType<
+    typeof summarizeWeatherDay
+  >;
+  high: number;
+  low: number;
+  symbol: string;
+  windRange: string;
+  maximumGust: string;
+}): {
+  label: string;
+  value: string;
+} {
+  switch (metric) {
+    case "morning-rain":
+      return {
+        label: "Morning rain",
+        value: formatPercent(
+          summary.morningRainPercent,
+        ),
+      };
+
+    case "afternoon-rain":
+      return {
+        label: "Afternoon rain",
+        value: formatPercent(
+          summary.afternoonRainPercent,
+        ),
+      };
+
+    case "evening-rain":
+      return {
+        label: "Evening rain",
+        value: formatPercent(
+          summary.eveningRainPercent,
+        ),
+      };
+
+    case "wind":
+      return {
+        label: "Wind",
+        value:
+          summary.dominantWindLabel
+            ? `${windRange} ${summary.dominantWindLabel}`
+            : windRange,
+      };
+
+    case "max-gust":
+      return {
+        label: "Max gust",
+        value: maximumGust,
+      };
+
+    case "high-low":
+      return {
+        label: "High / low",
+        value: `${high}° / ${low}°${symbol}`,
+      };
+
+    case "forecast-hours":
+      return {
+        label: "Forecast hours",
+        value: `${summary.hours.length} points`,
+      };
+
+    case "rain-am-pm":
+    default:
+      return {
+        label: "Rain",
+        value: `AM ${formatPercent(
+          summary.morningRainPercent,
+        )} · PM ${formatPercent(
+          summary.afternoonRainPercent,
+        )}`,
+      };
+  }
 }
 
 function temperatureValue(
@@ -950,20 +1372,20 @@ function temperatureValue(
 
 function formatHourLabel(
   localDateTime: string,
-  todayDate: string,
   selectedDate: string,
 ): string {
-  const date = dateKeyFromLocalTime(localDateTime);
-  const time = formatLocalHour(localDateTime);
+  const date =
+    dateKeyFromLocalTime(localDateTime);
+  const time =
+    formatLocalHour(localDateTime);
 
   if (date === selectedDate) {
     return time;
   }
 
-  return `${formatCompactForecastDateLabel({
+  return `${formatShortNumericDate(
     date,
-    todayDate,
-  })} ${time}`;
+  )} ${time}`;
 }
 
 function formatPercent(
