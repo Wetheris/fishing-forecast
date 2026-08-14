@@ -44,6 +44,9 @@ type AuthContextValue = {
 const AuthContext =
   createContext<AuthContextValue | null>(null);
 
+const DEFAULT_PRODUCTION_SITE_URL =
+  "https://fishing-forecast-five.vercel.app";
+
 export function AuthProvider({
   children,
 }: {
@@ -296,13 +299,27 @@ export function useAuth(): AuthContextValue {
 function browserUrl(
   pathname: string,
 ): string | undefined {
-  if (
-    typeof window === "undefined"
-  ) {
-    return undefined;
+  const configured =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (configured) {
+    return `${configured.replace(/\/+$/, "")}${pathname}`;
   }
 
-  return `${window.location.origin}${pathname}`;
+  /*
+   * Production auth emails must never inherit localhost from a
+   * stale Supabase Site URL. Keep local development local, but
+   * use the canonical production host for production builds.
+   */
+  if (process.env.NODE_ENV === "production") {
+    return `${DEFAULT_PRODUCTION_SITE_URL}${pathname}`;
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}${pathname}`;
+  }
+
+  return undefined;
 }
 
 function notConfigured(): AuthResult {
