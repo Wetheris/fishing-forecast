@@ -11,6 +11,12 @@ type IconKind =
   | "weather"
   | "moon";
 
+type MetricSignal =
+  | "temperature"
+  | "wind"
+  | "tide"
+  | "waves";
+
 const categories: Array<{
   name: string;
   description: string;
@@ -49,108 +55,148 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16 lg:py-24">
-        <div className="max-w-2xl lg:flex-1">
-          <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-[var(--accent)]">
-            {signedIn ? "Welcome back" : "Fishing Forecast"}
-          </p>
+      <section
+        className={[
+          "relative overflow-hidden",
+          signedIn
+            ? ""
+            : "border-b border-[var(--border)] bg-[linear-gradient(135deg,#f7fbfb_0%,#edf7f7_48%,#f9fbfa_100%)]",
+        ].join(" ")}
+      >
+        {!signedIn ? <MarineAtmosphere /> : null}
 
-          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-            {signedIn
-              ? "Your fishing dashboards are ready when you are."
-              : "Build the fishing dashboard that matches how you fish."}
-          </h1>
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-12 px-6 py-16 lg:flex-row lg:items-center lg:gap-16 lg:py-24">
+          <div className="max-w-2xl lg:flex-1">
+            {signedIn ? (
+              <p className="mb-3 text-sm font-medium uppercase tracking-[0.2em] text-[var(--accent)]">
+                Welcome back
+              </p>
+            ) : (
+              <LiveConditionsBadge />
+            )}
 
-          <p className="mt-5 max-w-xl text-lg leading-8 text-[var(--muted)]">
-            {signedIn
-              ? "Open a saved dashboard, adjust your setup, or build another view for your next trip."
-              : "Choose independent weather locations, tide stations, marine points, and astronomy locations. Add only the widgets you care about."}
-          </p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
+              {signedIn
+                ? "Your fishing dashboards are ready when you are."
+                : "Dial in the conditions. Fish smarter."}
+            </h1>
 
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={signedIn ? "/dashboards" : "/build"}
-              className="rounded-xl bg-[var(--accent)] px-5 py-3 font-medium text-white transition hover:bg-[var(--accent-strong)]"
-            >
-              {signedIn ? "My dashboards" : "Start building"}
-            </Link>
-
-            <Link
-              href={signedIn ? "/build" : "#categories"}
-              className="rounded-xl border border-[var(--border)] bg-transparent px-5 py-3 font-medium transition hover:bg-[var(--surface-muted)]"
-            >
-              {signedIn ? "Build another dashboard" : "Explore widgets"}
-            </Link>
-          </div>
-
-          {!signedIn && !loading ? (
-            <p className="mt-3 text-sm text-[var(--muted)]">
-              No account required to start.
+            <p className="mt-5 max-w-xl text-lg leading-8 text-[var(--muted)]">
+              {signedIn
+                ? "Open a saved dashboard, adjust your setup, or build another view for your next trip."
+                : "Build a fishing dashboard around the weather, tides, wind, waves, and locations that matter to you."}
             </p>
-          ) : signedIn ? (
-            <Link
-              href="/sessions"
-              className="mt-3 inline-flex text-sm font-medium text-[var(--accent)] hover:underline"
-            >
-              View fishing sessions →
-            </Link>
-          ) : null}
-        </div>
 
-        <div className="flex-1">
-          <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-              <div>
-                <p className="text-sm font-semibold">
-                  Your fishing dashboard
-                </p>
-                <p className="mt-0.5 text-xs text-[var(--muted)]">
-                  Drag, resize, and add only what matters.
-                </p>
-              </div>
-              <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-medium text-[var(--muted)]">
-                Customize
-              </span>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href={signedIn ? "/dashboards" : "/build"}
+                className="rounded-xl bg-[var(--accent)] px-5 py-3 font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] hover:shadow-md"
+              >
+                {signedIn ? "My dashboards" : "Start building"}
+              </Link>
+
+              <Link
+                href={signedIn ? "/build" : "#categories"}
+                className="rounded-xl border border-[var(--border)] bg-white/55 px-5 py-3 font-medium backdrop-blur-sm transition hover:bg-white"
+              >
+                {signedIn ? "Build another dashboard" : "Explore widgets"}
+              </Link>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 p-5">
-              <Metric
-                icon="temperature"
-                label="Temperature"
-                value="74°F"
-                detail="Cape May Point"
-              />
-              <Metric
-                icon="wind"
-                label="Wind"
-                value="9 mph"
-                detail="NE · Gusts 15 mph"
-              />
-              <Metric
-                icon="tides"
-                label="Next high tide"
-                value="2:46 PM"
-                detail="4.7 ft"
-              />
-              <Metric
-                icon="marine"
-                label="Waves"
-                value="2.1 ft"
-                detail="7 second period"
-              />
-
-              <div className="col-span-2 flex min-h-16 items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]/45 text-sm font-medium text-[var(--muted)]">
-                <span className="mr-2 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border)] bg-white text-lg leading-none text-[var(--accent)]">
-                  +
+            {!signedIn && !loading ? (
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckMark />
+                  No account required to start
                 </span>
-                Add widget
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckMark />
+                  Desktop + mobile layouts
+                </span>
               </div>
-            </div>
+            ) : signedIn ? (
+              <Link
+                href="/sessions"
+                className="mt-3 inline-flex text-sm font-medium text-[var(--accent)] hover:underline"
+              >
+                View fishing sessions →
+              </Link>
+            ) : null}
           </div>
 
-          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--muted)]">
-            <DragDots />
-            Arrange the dashboard around the way you fish
+          <div className="flex-1">
+            <div
+              className={[
+                "overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-sm",
+                signedIn
+                  ? ""
+                  : "shadow-[0_24px_70px_rgba(8,127,140,0.12)]",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    </span>
+                    <p className="text-sm font-semibold">
+                      Your fishing dashboard
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Cape May Point · conditions at a glance
+                  </p>
+                </div>
+
+                <span className="rounded-full border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1 text-xs font-medium text-[var(--muted)]">
+                  Customize
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-5">
+                <Metric
+                  icon="temperature"
+                  signal="temperature"
+                  label="Temperature"
+                  value="74°F"
+                  detail="Feels like 75°"
+                />
+                <Metric
+                  icon="wind"
+                  signal="wind"
+                  label="Wind"
+                  value="9 mph"
+                  detail="NE · Gusts 15 mph"
+                />
+                <Metric
+                  icon="tides"
+                  signal="tide"
+                  label="Next high tide"
+                  value="2:46 PM"
+                  detail="4.7 ft · rising"
+                />
+                <Metric
+                  icon="marine"
+                  signal="waves"
+                  label="Waves"
+                  value="2.1 ft"
+                  detail="7 second period"
+                />
+
+                <div className="col-span-2 flex min-h-16 items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]/45 text-sm font-medium text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]">
+                  <span className="mr-2 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border)] bg-white text-lg leading-none text-[var(--accent)]">
+                    +
+                  </span>
+                  Add widget
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--muted)]">
+              <DragDots />
+              Arrange the dashboard around the way you fish
+            </div>
           </div>
         </div>
       </section>
@@ -193,28 +239,112 @@ export default function HomePage() {
   );
 }
 
+function MarineAtmosphere() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+    >
+      <div className="absolute -right-24 -top-32 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(8,127,140,0.15)_0%,rgba(8,127,140,0.04)_44%,transparent_70%)]" />
+      <div className="absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,rgba(40,154,168,0.09)_0%,transparent_68%)]" />
+
+      <svg
+        viewBox="0 0 900 420"
+        preserveAspectRatio="none"
+        className="absolute inset-x-0 bottom-0 h-[72%] w-full text-[var(--accent)] opacity-[0.07]"
+      >
+        <path
+          d="M-40 325c90-68 162-85 245-57 91 31 143 6 226-45 104-64 206-47 304-2 70 32 136 24 205-22"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <path
+          d="M-60 354c112-70 190-79 273-46 85 34 144 16 224-29 105-59 192-50 285-13 82 33 158 30 246-16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
+        <path
+          d="M-50 383c116-59 197-65 284-31 76 30 138 21 219-16 104-47 198-43 293-11 85 29 159 28 232-6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M130 245c54-45 112-60 165-43 48 16 89 8 137-26 68-49 128-53 187-22"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.3"
+        />
+        <path
+          d="M178 214c38-29 78-39 117-27 41 13 74 7 109-18 49-35 94-39 138-19"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.1"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function LiveConditionsBadge() {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--muted)] shadow-sm backdrop-blur-sm">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+      </span>
+      Weather · Tides · Wind · Marine
+    </div>
+  );
+}
+
+function CheckMark() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="h-4 w-4 text-[var(--accent)]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m5 10 3 3 7-7" />
+    </svg>
+  );
+}
+
 function Metric({
   icon,
+  signal,
   label,
   value,
   detail,
 }: {
   icon: IconKind;
+  signal: MetricSignal;
   label: string;
   value: string;
   detail: string;
 }) {
   return (
-    <div className="relative rounded-2xl bg-[var(--surface-muted)] p-4">
+    <div className="relative overflow-hidden rounded-2xl bg-[var(--surface-muted)] p-4">
       <span
         aria-hidden="true"
-        className="absolute right-3 top-3 text-[var(--muted)]/70"
+        className="absolute right-3 top-3 text-[var(--muted)]/60"
       >
         <DragDots />
       </span>
 
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[var(--accent)] shadow-sm">
-        <DataIcon kind={icon} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[var(--accent)] shadow-sm">
+          <DataIcon kind={icon} />
+        </div>
+
+        <MetricSignalGraphic signal={signal} />
       </div>
 
       <p className="mt-3 text-sm text-[var(--muted)]">
@@ -227,6 +357,87 @@ function Metric({
         {detail}
       </p>
     </div>
+  );
+}
+
+function MetricSignalGraphic({
+  signal,
+}: {
+  signal: MetricSignal;
+}) {
+  if (signal === "wind") {
+    return (
+      <div
+        className="mr-7 flex h-7 w-7 rotate-45 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--accent)] shadow-sm"
+        title="Northeast wind"
+      >
+        <svg
+          viewBox="0 0 20 20"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M10 16V4" />
+          <path d="m6 8 4-4 4 4" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (signal === "tide") {
+    return (
+      <svg
+        viewBox="0 0 52 24"
+        className="mr-7 h-7 w-13 text-[var(--accent)]"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M2 20c8-1 11-7 17-8 7-1 8 5 14 3 6-2 8-9 17-12"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <circle
+          cx="50"
+          cy="3"
+          r="2.5"
+          fill="currentColor"
+          className="animate-pulse"
+        />
+      </svg>
+    );
+  }
+
+  if (signal === "waves") {
+    return (
+      <svg
+        viewBox="0 0 50 24"
+        className="mr-7 h-7 w-12 text-[var(--accent)]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M2 11c5 0 5-5 10-5s5 5 10 5 5-5 10-5 5 5 10 5 5-5 6-5" />
+        <path
+          d="M2 17c5 0 5-3 10-3s5 3 10 3 5-3 10-3 5 3 10 3 5-3 6-3"
+          opacity=".45"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <span className="mr-7 inline-flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 shadow-sm">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      Current
+    </span>
   );
 }
 
