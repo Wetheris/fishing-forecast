@@ -1,0 +1,110 @@
+/*
+ * TideHawk shell polish
+ *
+ * The brand previously floated above the home page with a high z-index.
+ * Keep it in normal document flow instead, so it never covers hero content.
+ */
+
+a[aria-label="TideHawk home"] {
+  position: relative !important;
+  inset: auto !important;
+  z-index: 850 !important;
+  box-sizing: border-box;
+  display: flex !important;
+  width: 100%;
+  height: 64px;
+  align-items: center;
+  padding: 0 24px 0 64px !important;
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+a[aria-label="TideHawk home"]:hover {
+  background: rgba(255, 255, 255, 0.82) !important;
+}
+
+a[aria-label="TideHawk home"] img {
+  width: 148px !important;
+  height: auto !important;
+  opacity: 0.9;
+}
+
+/*
+ * Make the floating menu trigger feel lighter and less like a card that is
+ * sitting on top of the application.
+ */
+[data-main-menu-button] {
+  width: 40px !important;
+  height: 40px !important;
+  border-color: color-mix(in srgb, var(--border) 78%, transparent) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-main-menu-button]:hover {
+  background: rgba(255, 255, 255, 0.96) !important;
+}
+
+/*
+ * Open-menu header: one compact brand row. The close button already lives in
+ * the top-left, so the logo aligns beside it and the redundant "Menu" title
+ * disappears.
+ */
+[data-main-menu-root][data-main-menu-open="true"] [data-main-menu-button] {
+  border-color: transparent !important;
+  background: var(--surface-muted) !important;
+  box-shadow: none !important;
+}
+
+[data-main-menu-root][data-main-menu-open="true"] aside > header {
+  box-sizing: border-box;
+  display: flex !important;
+  min-height: 64px;
+  align-items: center;
+  padding: 0 20px 0 64px !important;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+[data-main-menu-root][data-main-menu-open="true"] aside > header img {
+  width: 132px !important;
+  height: auto !important;
+  opacity: 0.9;
+}
+
+[data-main-menu-root][data-main-menu-open="true"] aside > header h2 {
+  display: none !important;
+}
+
+[data-main-menu-root][data-main-menu-open="true"] aside > div {
+  padding-top: 14px !important;
+}
+
+[data-main-menu-root][data-main-menu-open="true"] aside section {
+  margin-bottom: 1.25rem !important;
+}
+
+@media (max-width: 520px) {
+  a[aria-label="TideHawk home"] {
+    height: 60px;
+    padding-right: 16px !important;
+  }
+
+  a[aria-label="TideHawk home"] img {
+    width: 136px !important;
+  }
+
+  [data-main-menu-root][data-main-menu-open="true"] aside > header {
+    min-height: 60px;
+    padding-right: 16px !important;
+  }
+
+  [data-main-menu-root][data-main-menu-open="true"] aside > header img {
+    width: 124px !important;
+  }
+}

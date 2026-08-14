@@ -3,6 +3,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import "./brand.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { MainMenu } from "@/components/navigation/MainMenu";
 import { TideHawkBrand } from "@/components/navigation/TideHawkBrand";
