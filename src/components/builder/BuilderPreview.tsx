@@ -216,7 +216,7 @@ export function BuilderPreview({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        <div className="flex min-h-full min-w-full items-start justify-center p-4 sm:p-5">
+        <div className="flex min-h-full min-w-full flex-col items-center justify-start px-4 pt-4 pb-20 sm:px-5 sm:pt-5 sm:pb-24">
           <div
             className="shrink-0"
             style={{

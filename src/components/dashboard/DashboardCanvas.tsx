@@ -353,12 +353,18 @@ function getEffectiveMinimums(
       "standard",
     ) === "compact";
 
+  const mobile =
+    layout.device === "mobile";
+
   if (!compact) {
     const contentMinHeight =
-      widget.widgetKey === "forecast-overview" ||
-      widget.widgetKey === "hourly-forecast"
-        ? 3
-        : standard.minH;
+      widget.widgetKey === "forecast-overview"
+        ? mobile
+          ? 5
+          : 3
+        : widget.widgetKey === "hourly-forecast"
+          ? 3
+          : standard.minH;
 
     return {
       minW: standard.minW,
@@ -369,14 +375,11 @@ function getEffectiveMinimums(
     };
   }
 
-  const mobile =
-    layout.device === "mobile";
-
   switch (widget.widgetKey) {
     case "forecast-overview":
       return {
         minW: 4,
-        minH: 3,
+        minH: mobile ? 4 : 3,
       };
 
     case "hourly-forecast":

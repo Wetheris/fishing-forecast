@@ -209,8 +209,8 @@ export function ForecastOverviewWidget({
 
         if (compact) {
           return (
-            <div className="grid h-full min-h-0 grid-cols-[minmax(110px,1.2fr)_minmax(0,2fr)] items-center gap-3 overflow-hidden">
-              <div className="min-w-0">
+            <div className="flex h-full min-h-0 flex-wrap content-center items-center gap-x-3 gap-y-3 overflow-hidden">
+              <div className="min-w-[120px] flex-[1_1_160px]">
                 <ForecastDaySelector
                   daily={data.daily}
                   selectedDate={
@@ -235,7 +235,13 @@ export function ForecastOverviewWidget({
                 </p>
               </div>
 
-              <div className="grid min-w-0 grid-cols-3 gap-x-2 gap-y-2">
+              <div
+                className="grid min-w-[220px] flex-[2_1_420px] gap-x-3 gap-y-2"
+                style={{
+                  gridTemplateColumns:
+                    "repeat(auto-fit, minmax(96px, 1fr))",
+                }}
+              >
                 {summaryItems.map(
                   (item, index) => (
                     <SummaryValue
@@ -265,8 +271,8 @@ export function ForecastOverviewWidget({
         }
 
         return (
-          <div className="grid h-full min-h-0 grid-cols-[minmax(240px,0.9fr)_minmax(0,2fr)] items-center gap-6 overflow-hidden">
-            <div className="flex min-w-0 items-center gap-4 overflow-hidden">
+          <div className="flex h-full min-h-0 flex-wrap content-center items-center gap-x-6 gap-y-4 overflow-hidden">
+            <div className="flex min-w-[220px] flex-[1_1_260px] items-center gap-4 overflow-hidden">
               <WeatherConditionIcon
                 weatherCode={day.weatherCode}
                 condition={day.condition}
@@ -303,7 +309,13 @@ export function ForecastOverviewWidget({
               </div>
             </div>
 
-            <div className="grid min-w-0 grid-cols-3 content-center gap-x-5 gap-y-4 overflow-hidden">
+            <div
+              className="grid min-w-[240px] flex-[2_1_520px] content-center gap-x-5 gap-y-4"
+              style={{
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(132px, 1fr))",
+              }}
+            >
               {summaryItems.map(
                 (item, index) => (
                   <SummaryValue
