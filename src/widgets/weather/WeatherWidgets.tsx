@@ -347,7 +347,7 @@ export function CurrentConditionsWidget({
         }
 
         const effectiveShowIcon =
-          showIcon && !compact;
+          showIcon;
         const shouldShowText =
           showText || !effectiveShowIcon;
 
@@ -356,7 +356,9 @@ export function CurrentConditionsWidget({
             className={[
               "flex h-full min-h-0 items-center overflow-hidden",
               effectiveShowIcon && shouldShowText
-                ? "gap-4"
+                ? compact
+                  ? "gap-2"
+                  : "gap-4"
                 : "justify-center",
             ].join(" ")}
           >
@@ -364,6 +366,7 @@ export function CurrentConditionsWidget({
               <WeatherConditionIcon
                 weatherCode={weatherCode}
                 condition={condition}
+                size={compact ? 28 : 56}
               />
             ) : null}
 
@@ -702,13 +705,11 @@ export function DailyForecastWidget({
                     })}
                   </span>
 
-                  {!compact ? (
-                    <WeatherConditionIcon
-                      weatherCode={day.weatherCode}
-                      condition={day.condition}
-                      size={48}
-                    />
-                  ) : null}
+                  <WeatherConditionIcon
+                    weatherCode={day.weatherCode}
+                    condition={day.condition}
+                    size={compact ? 20 : 48}
+                  />
 
                   <span
                     className={[
@@ -797,13 +798,11 @@ function HourlyForecastStrip({
 
           {metric === "temperature" ? (
             <>
-              {!compact ? (
-                <WeatherConditionIcon
-                  weatherCode={hour.weatherCode}
-                  condition={hour.condition}
-                  size={38}
-                />
-              ) : null}
+              <WeatherConditionIcon
+                weatherCode={hour.weatherCode}
+                condition={hour.condition}
+                size={compact ? 18 : 38}
+              />
               <p
                 className={
                   compact
@@ -830,13 +829,11 @@ function HourlyForecastStrip({
 
           {metric === "precipitation" ? (
             <>
-              {!compact ? (
-                <WeatherConditionIcon
-                  weatherCode={hour.weatherCode}
-                  condition={hour.condition}
-                  size={38}
-                />
-              ) : null}
+              <WeatherConditionIcon
+                weatherCode={hour.weatherCode}
+                condition={hour.condition}
+                size={compact ? 18 : 38}
+              />
               <p
                 className={
                   compact
