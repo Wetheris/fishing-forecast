@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { MainMenu } from "@/components/navigation/MainMenu";
+import { TideHawkBrand } from "@/components/navigation/TideHawkBrand";
 
 export const metadata: Metadata = {
   title: {
@@ -23,6 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <TideHawkBrand />
         <AuthProvider>
           {children}
           <MainMenu />

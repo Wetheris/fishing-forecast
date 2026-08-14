@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import {
   useEffect,
@@ -173,10 +174,14 @@ export function MainMenu() {
 
             <aside className="fixed inset-y-0 left-0 z-[940] flex w-[88vw] max-w-sm flex-col border-r border-[var(--border)] bg-white shadow-2xl">
               <header className="shrink-0 border-b border-[var(--border)] py-5 pl-16 pr-5">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
-                  TideHawk
-                </p>
-                <h2 className="mt-1 text-xl font-semibold">
+                <Image
+                  src="/tidehawk-logo.png"
+                  alt="TideHawk"
+                  width={1100}
+                  height={308}
+                  className="h-auto w-36"
+                />
+                <h2 className="mt-2 text-xl font-semibold">
                   Menu
                 </h2>
               </header>
