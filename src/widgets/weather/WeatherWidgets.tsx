@@ -648,7 +648,7 @@ export function HourlyForecastWidget({
           <div
             className={[
               "flex h-full min-h-0 flex-col overflow-hidden",
-              compact ? "gap-1.5" : "gap-3",
+              compact ? "gap-1" : "gap-3",
             ].join(" ")}
           >
             <div className="flex shrink-0 flex-nowrap items-center justify-between gap-2 overflow-x-auto">
@@ -693,7 +693,7 @@ export function HourlyForecastWidget({
                 className={[
                   "shrink-0 rounded-lg border border-[var(--border)] font-medium hover:bg-[var(--surface-muted)]",
                   compact
-                    ? "px-2 py-1 text-[10px]"
+                    ? "px-2 py-0.5 text-[10px]"
                     : "px-3 py-1.5 text-xs",
                 ].join(" ")}
               >
@@ -892,7 +892,7 @@ function HourlyForecastStrip({
       ].join(" ")}
       style={{
         gridAutoColumns: compact
-          ? "minmax(70px, 1fr)"
+          ? "minmax(76px, 1fr)"
           : "minmax(94px, 1fr)",
       }}
     >
@@ -901,22 +901,17 @@ function HourlyForecastStrip({
           key={`${metric}-${hour.time}`}
           className={[
             "flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl bg-[var(--surface-muted)] text-center",
-            compact ? "px-1 py-0.5" : "p-3",
+            compact ? "gap-0.5 px-1 py-1" : "p-3",
           ].join(" ")}
         >
           {compact ? (
-            <div className="text-[10px] leading-tight text-[var(--muted)]">
-              <p className="whitespace-nowrap">
-                {formatShortNumericDate(
-                  dateKeyFromLocalTime(
-                    hour.time,
-                  ),
-                )}
-              </p>
-              <p className="mt-0.5 whitespace-nowrap">
-                {formatLocalHour(hour.time)}
-              </p>
-            </div>
+            <p className="whitespace-nowrap text-[11px] font-semibold leading-none tracking-tight text-[var(--foreground)]">
+              {formatShortNumericDate(
+                dateKeyFromLocalTime(hour.time),
+              )}
+              <span className="px-1 text-[var(--muted)]">·</span>
+              {formatLocalHour(hour.time)}
+            </p>
           ) : (
             <p className="truncate text-xs text-[var(--muted)]">
               {formatHourLabel(
@@ -931,7 +926,7 @@ function HourlyForecastStrip({
               <WeatherConditionIcon
                 weatherCode={hour.weatherCode}
                 condition={hour.condition}
-                size={compact ? 18 : 38}
+                size={compact ? 16 : 38}
               />
               <p
                 className={
@@ -962,7 +957,7 @@ function HourlyForecastStrip({
               <WeatherConditionIcon
                 weatherCode={hour.weatherCode}
                 condition={hour.condition}
-                size={compact ? 18 : 38}
+                size={compact ? 16 : 38}
               />
               <p
                 className={
@@ -989,7 +984,7 @@ function HourlyForecastStrip({
                 fromDegrees={
                   hour.windDirectionDegrees
                 }
-                size={compact ? 20 : 38}
+                size={compact ? 18 : 38}
               />
               <p
                 className={
@@ -1036,7 +1031,7 @@ function MetricTab({
       className={[
         "rounded-lg",
         compact
-          ? "px-2 py-1 text-[10px]"
+          ? "px-2 py-0.5 text-[10px]"
           : "px-3 py-1.5 text-xs",
         active
           ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-sm"
