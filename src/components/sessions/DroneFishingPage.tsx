@@ -13,7 +13,9 @@ import {
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { DroneDropMap } from "@/components/sessions/DroneDropMap";
+import { DroneCatchDetailsDialog } from "@/components/sessions/DroneCatchDetailsDialog";
 import {
+  createDroneCatchFromDrop,
   createDroneFishingDrop,
   listDroneFishingDrops,
   loadFishingSession,
@@ -24,6 +26,7 @@ import {
 } from "@/lib/session-conditions";
 import type {
   DroneFishingDrop,
+  FishingCatch,
   FishingSessionDetail,
   SessionConditionSnapshot,
 } from "@/types/sessions";
@@ -93,6 +96,8 @@ export function DroneFishingPage() {
     useState(false);
   const [status, setStatus] =
     useState<string>();
+  const [editingCatch, setEditingCatch] =
+    useState<FishingCatch>();
 
   const [now, setNow] =
     useState(() => Date.now());
@@ -428,14 +433,44 @@ export function DroneFishingPage() {
       }
 
       if (action === "fish") {
+        const existingCatch =
+          session?.catches.find(
+            (catchItem) =>
+              catchItem.droneDropId ===
+              drop.id,
+          );
+
+        if (existingCatch) {
+          setEditingCatch(
+            existingCatch,
+          );
+          return;
+        }
+
+        if (!user || !session) {
+          throw new Error(
+            "Sign in before logging a catch.",
+          );
+        }
+
+        await createDroneCatchFromDrop({
+          user,
+          sessionId: session.id,
+          drop,
+          sessionLocationName:
+            session.locationName,
+        });
+
         await updateDroneFishingDrop(
           drop.id,
           {
             caughtFishAt:
-              drop.caughtFishAt
-                ? null
-                : eventTime,
+              eventTime,
           },
+        );
+
+        setStatus(
+          `${drop.rodLabel} catch saved. Add a photo/details now or later.`,
         );
       }
 
@@ -867,9 +902,19 @@ export function DroneFishingPage() {
                 <DropCard
                   key={drop.id}
                   drop={drop}
+                  catchItem={
+                    session.catches.find(
+                      (catchItem) =>
+                        catchItem.droneDropId ===
+                        drop.id,
+                    )
+                  }
                   now={now}
                   onAction={
                     markDrop
+                  }
+                  onEditCatch={
+                    setEditingCatch
                   }
                 />
               ))}
@@ -877,6 +922,26 @@ export function DroneFishingPage() {
           )}
         </section>
       </div>
+
+      {editingCatch ? (
+        <DroneCatchDetailsDialog
+          catchItem={editingCatch}
+          onClose={() =>
+            setEditingCatch(
+              undefined,
+            )
+          }
+          onSaved={() => {
+            setEditingCatch(
+              undefined,
+            );
+            setStatus(
+              "Catch details saved.",
+            );
+            void refresh();
+          }}
+        />
+      ) : null}
 
       {!betaAccepted ? (
         <BetaGate
@@ -1023,10 +1088,13 @@ function ConditionsPanel({
 
 function DropCard({
   drop,
+  catchItem,
   now,
   onAction,
+  onEditCatch,
 }: {
   drop: DroneFishingDrop;
+  catchItem?: FishingCatch;
   now: number;
   onAction: (
     drop: DroneFishingDrop,
@@ -1035,6 +1103,9 @@ function DropCard({
       | "fish"
       | "retrieve",
   ) => Promise<void>;
+  onEditCatch: (
+    catchItem: FishingCatch,
+  ) => void;
 }) {
   const endTime =
     drop.retrievedAt
@@ -1149,25 +1220,36 @@ function DropCard({
             : "Bite"}
         </button>
 
-        <button
-          type="button"
-          onClick={() =>
-            void onAction(
-              drop,
-              "fish",
+        {catchItem ? (
+          <button
+            type="button"
+            onClick={() =>
+              onEditCatch(
+                catchItem,
+              )
+            }
+            className="rounded-xl border border-green-300 bg-green-50 px-3 py-2 text-xs font-medium text-green-800"
+          >
+            {hasCatchDetails(
+              catchItem,
             )
-          }
-          className={[
-            "rounded-xl border px-3 py-2 text-xs font-medium",
-            drop.caughtFishAt
-              ? "border-green-300 bg-green-50 text-green-800"
-              : "border-[var(--border)]",
-          ].join(" ")}
-        >
-          {drop.caughtFishAt
-            ? "✓ Fish"
-            : "Caught fish"}
-        </button>
+              ? "Edit catch details"
+              : "Add photo / details"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() =>
+              void onAction(
+                drop,
+                "fish",
+              )
+            }
+            className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
+          >
+            Caught fish
+          </button>
+        )}
 
         <button
           type="button"
@@ -1219,6 +1301,19 @@ function DropCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function hasCatchDetails(
+  catchItem: FishingCatch,
+): boolean {
+  return Boolean(
+    catchItem.species ||
+      catchItem.lengthValue !== null ||
+      catchItem.weightValue !== null ||
+      catchItem.notes ||
+      catchItem.originalPhotoPath ||
+      catchItem.stampedPhotoPath,
   );
 }
 

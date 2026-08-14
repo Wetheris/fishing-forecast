@@ -3,12 +3,14 @@
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { normalizeCatchPhoto } from "@/lib/photo-stamp";
+import { DEFAULT_PHOTO_STAMP_SETTINGS } from "@/types/sessions";
 import type {
   CatchDraft,
   FishingCatch,
   DroneFishingDrop,
   DroneFishingDropDraft,
   DroneFishingDropUpdate,
+  FishingCatchDetailsUpdate,
   FishingSessionDetail,
   FishingSessionSummary,
   PhotoStampSettings,
@@ -31,6 +33,8 @@ type SessionRow = {
 type CatchRow = {
   id: string;
   session_id: string;
+  source: "manual" | "drone";
+  drone_drop_id: string | null;
   caught_at: string;
   latitude: number;
   longitude: number;
@@ -185,7 +189,7 @@ export async function loadFishingSession(
     supabase
       .from("fishing_catches")
       .select(
-        "id, session_id, caught_at, latitude, longitude, location_name, species, length_value, weight_value, lure_bait, notes, conditions, stamp_settings, original_photo_path, stamped_photo_path, created_at",
+        "id, session_id, source, drone_drop_id, caught_at, latitude, longitude, location_name, species, length_value, weight_value, lure_bait, notes, conditions, stamp_settings, original_photo_path, stamped_photo_path, created_at",
       )
       .eq("session_id", id)
       .order("caught_at", {
@@ -269,6 +273,7 @@ export async function createFishingCatch({
         id: catchId,
         session_id: sessionId,
         user_id: user.id,
+        source: "manual",
         caught_at: draft.caughtAt,
         latitude: draft.latitude,
         longitude: draft.longitude,
@@ -406,6 +411,149 @@ export async function createFishingCatch({
   return catchId;
 }
 
+
+
+export async function createDroneCatchFromDrop({
+  user,
+  sessionId,
+  drop,
+  sessionLocationName,
+}: {
+  user: User;
+  sessionId: string;
+  drop: DroneFishingDrop;
+  sessionLocationName?: string | null;
+}): Promise<string> {
+  const supabase = getRequiredSupabaseClient();
+  const caughtAt = new Date().toISOString();
+
+  /*
+   * Keep this action fast. We already froze a conditions snapshot when
+   * the bait was dropped, so the catch exists immediately even if the
+   * angler does not have time to fill out anything else.
+   */
+  const { data, error } = await supabase
+    .from("fishing_catches")
+    .insert({
+      session_id: sessionId,
+      user_id: user.id,
+      source: "drone",
+      drone_drop_id: drop.id,
+      caught_at: caughtAt,
+      latitude: drop.latitude,
+      longitude: drop.longitude,
+      location_name: [
+        sessionLocationName?.trim(),
+        drop.rodLabel,
+        `Drop ${drop.dropNumber}`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      species: null,
+      length_value: null,
+      weight_value: null,
+      lure_bait: drop.bait,
+      notes: null,
+      conditions: drop.conditions,
+      stamp_settings:
+        DEFAULT_PHOTO_STAMP_SETTINGS,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return String(data.id);
+}
+
+export async function updateFishingCatchDetails({
+  user,
+  catchItem,
+  details,
+  originalPhoto,
+  stampedPhoto,
+}: {
+  user: User;
+  catchItem: FishingCatch;
+  details: FishingCatchDetailsUpdate;
+  originalPhoto?: File;
+  stampedPhoto?: Blob;
+}): Promise<void> {
+  const supabase = getRequiredSupabaseClient();
+
+  let originalPhotoPath =
+    catchItem.originalPhotoPath;
+  let stampedPhotoPath =
+    catchItem.stampedPhotoPath;
+
+  if (originalPhoto) {
+    originalPhotoPath =
+      `${user.id}/${catchItem.sessionId}/${catchItem.id}/original.jpg`;
+
+    const { error } =
+      await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(
+          originalPhotoPath,
+          originalPhoto,
+          {
+            contentType: "image/jpeg",
+            upsert: true,
+          },
+        );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  if (stampedPhoto) {
+    stampedPhotoPath =
+      `${user.id}/${catchItem.sessionId}/${catchItem.id}/stamped.jpg`;
+
+    const { error } =
+      await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(
+          stampedPhotoPath,
+          stampedPhoto,
+          {
+            contentType: "image/jpeg",
+            upsert: true,
+          },
+        );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
+
+  const { error } = await supabase
+    .from("fishing_catches")
+    .update({
+      species:
+        details.species?.trim() || null,
+      length_value:
+        details.lengthValue ?? null,
+      weight_value:
+        details.weightValue ?? null,
+      lure_bait:
+        details.lureBait?.trim() || null,
+      notes:
+        details.notes?.trim() || null,
+      original_photo_path:
+        originalPhotoPath,
+      stamped_photo_path:
+        stampedPhotoPath,
+    })
+    .eq("id", catchItem.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
 
 export async function listDroneFishingDrops(
   sessionId: string,
@@ -569,6 +717,14 @@ function mapCatchRow(
   return {
     id: String(row.id),
     sessionId: String(row.session_id),
+    source:
+      row.source === "drone"
+        ? "drone"
+        : "manual",
+    droneDropId:
+      row.drone_drop_id === null
+        ? null
+        : String(row.drone_drop_id),
     caughtAt: String(row.caught_at),
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),

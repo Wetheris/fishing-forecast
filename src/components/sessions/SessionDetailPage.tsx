@@ -10,6 +10,7 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { LogCatchDialog } from "@/components/sessions/LogCatchDialog";
+import { DroneCatchDetailsDialog } from "@/components/sessions/DroneCatchDetailsDialog";
 import {
   createCatchPhotoSignedUrl,
   endFishingSession,
@@ -46,6 +47,8 @@ export function SessionDetailPage() {
     useState<string>();
   const [logCatchOpen, setLogCatchOpen] =
     useState(false);
+  const [editingDroneCatch, setEditingDroneCatch] =
+    useState<FishingCatch>();
   const [authOpen, setAuthOpen] =
     useState(false);
   const [ending, setEnding] =
@@ -369,6 +372,9 @@ export function SessionDetailPage() {
                         catchItem.id
                       ]
                     }
+                    onEditDroneCatch={
+                      setEditingDroneCatch
+                    }
                   />
                 ),
               )}
@@ -376,6 +382,25 @@ export function SessionDetailPage() {
           )}
         </section>
       </div>
+
+      {editingDroneCatch ? (
+        <DroneCatchDetailsDialog
+          catchItem={
+            editingDroneCatch
+          }
+          onClose={() =>
+            setEditingDroneCatch(
+              undefined,
+            )
+          }
+          onSaved={() => {
+            setEditingDroneCatch(
+              undefined,
+            );
+            void refresh();
+          }}
+        />
+      ) : null}
 
       {logCatchOpen ? (
         <LogCatchDialog
@@ -396,9 +421,13 @@ export function SessionDetailPage() {
 function CatchCard({
   catchItem,
   photoUrl,
+  onEditDroneCatch,
 }: {
   catchItem: FishingCatch;
   photoUrl?: string;
+  onEditDroneCatch: (
+    catchItem: FishingCatch,
+  ) => void;
 }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
@@ -420,10 +449,18 @@ function CatchCard({
       <div className="p-4">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-semibold">
-              {catchItem.species ||
-                "Catch"}
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-semibold">
+                {catchItem.species ||
+                  "Catch"}
+              </h3>
+              {catchItem.source ===
+              "drone" ? (
+                <span className="rounded-full bg-[var(--selection)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent)]">
+                  Drone
+                </span>
+              ) : null}
+            </div>
             <p className="mt-1 text-sm text-[var(--muted)]">
               {formatDateTime(
                 catchItem.caughtAt,
@@ -476,6 +513,24 @@ function CatchCard({
             }
           />
         </div>
+
+        {catchItem.source ===
+        "drone" ? (
+          <button
+            type="button"
+            onClick={() =>
+              onEditDroneCatch(
+                catchItem,
+              )
+            }
+            className="mt-4 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
+          >
+            {catchItem.species ||
+            catchItem.originalPhotoPath
+              ? "Edit catch details"
+              : "Add catch photo / details"}
+          </button>
+        ) : null}
 
         {catchItem.notes ? (
           <p className="mt-4 border-t border-[var(--border)] pt-3 text-sm">

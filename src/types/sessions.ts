@@ -83,9 +83,15 @@ export type FishingSessionSummary = {
   catchCount: number;
 };
 
+export type FishingCatchSource =
+  | "manual"
+  | "drone";
+
 export type FishingCatch = {
   id: string;
   sessionId: string;
+  source: FishingCatchSource;
+  droneDropId: string | null;
   caughtAt: string;
   latitude: number;
   longitude: number;
@@ -176,4 +182,13 @@ export type DroneFishingDropUpdate = {
   caughtFishAt?: string | null;
   retrievedAt?: string | null;
   notes?: string | null;
+};
+
+
+export type FishingCatchDetailsUpdate = {
+  species?: string;
+  lengthValue?: number;
+  weightValue?: number;
+  lureBait?: string;
+  notes?: string;
 };
