@@ -25,6 +25,7 @@ import type {
 import type { ForecastContext } from "@/types/forecast";
 import type { WeatherSourceStateMap } from "@/types/weather";
 import { getLayoutContentHeight } from "@/lib/layout-measurements";
+import { stringSetting } from "@/lib/widget-settings";
 import { getWidgetDefinition } from "@/widgets/registry";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 import { WidgetShell } from "@/components/dashboard/WidgetShell";
@@ -83,18 +84,38 @@ export function DashboardCanvas({
 
   const gridLayout = useMemo<Layout>(
     () =>
-      visiblePlacements.map((placement) => ({
-        i: placement.widgetId,
-        x: placement.x,
-        y: placement.y,
-        w: placement.w,
-        h: placement.h,
-        minW: placement.minW,
-        minH: placement.minH,
-        maxW: placement.maxW,
-        maxH: placement.maxH,
-      })),
-    [visiblePlacements],
+      visiblePlacements.map((placement) => {
+        const widget = widgets.find(
+          (item) =>
+            item.id === placement.widgetId,
+        );
+        const minimums = widget
+          ? getEffectiveMinimums(
+              widget,
+              layout,
+            )
+          : {
+              minW: placement.minW,
+              minH: placement.minH,
+            };
+
+        return {
+          i: placement.widgetId,
+          x: placement.x,
+          y: placement.y,
+          w: placement.w,
+          h: placement.h,
+          minW: minimums.minW,
+          minH: minimums.minH,
+          maxW: placement.maxW,
+          maxH: placement.maxH,
+        };
+      }),
+    [
+      layout,
+      visiblePlacements,
+      widgets,
+    ],
   );
 
   const contentHeight = getLayoutContentHeight(layout);
@@ -233,15 +254,6 @@ export function DashboardCanvas({
                 item.id === widget.sourceId,
             );
 
-          /*
-           * Saved dashboards can outlive a source ID when
-           * sources are replaced or migrated. Never fall
-           * back to sources[0], because that can bind a tide
-           * widget to weather data (or any other wrong kind).
-           * Prefer the configured source only when its kind
-           * matches the widget, otherwise select the first
-           * compatible source.
-           */
           const source =
             configuredSource?.kind ===
             definition.sourceKind
@@ -320,6 +332,78 @@ export function DashboardCanvas({
       </ReactGridLayout>
     </div>
   );
+}
+
+function getEffectiveMinimums(
+  widget: WidgetInstance,
+  layout: DashboardLayout,
+): {
+  minW: number;
+  minH: number;
+} {
+  const definition =
+    getWidgetDefinition(widget.widgetKey);
+  const standard =
+    definition.defaultPlacement[layout.device];
+  const compact =
+    stringSetting(
+      widget.settings,
+      "density",
+      "standard",
+    ) === "compact";
+
+  if (!compact) {
+    return {
+      minW: standard.minW,
+      minH: standard.minH,
+    };
+  }
+
+  const mobile =
+    layout.device === "mobile";
+
+  switch (widget.widgetKey) {
+    case "forecast-overview":
+      return {
+        minW: mobile ? 2 : 3,
+        minH: 2,
+      };
+
+    case "hourly-forecast":
+    case "wind-forecast":
+    case "tide-timeline":
+      return {
+        minW: mobile ? 2 : 3,
+        minH: 2,
+      };
+
+    case "daily-forecast":
+      return {
+        minW: mobile ? 2 : 3,
+        minH: 1,
+      };
+
+    case "radar-map":
+      return {
+        minW: mobile ? 2 : 3,
+        minH: 3,
+      };
+
+    case "tide-station":
+    case "swell-information":
+    case "moonrise-moonset":
+    case "sunrise-sunset":
+      return {
+        minW: mobile ? 2 : 2,
+        minH: 1,
+      };
+
+    default:
+      return {
+        minW: 1,
+        minH: 1,
+      };
+  }
 }
 
 function getUpdatedAt({

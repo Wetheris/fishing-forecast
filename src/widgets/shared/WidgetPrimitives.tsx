@@ -53,19 +53,19 @@ export function CompactTimeline({
   }>;
 }) {
   return (
-    <div className="grid h-full auto-cols-fr grid-flow-col gap-2 overflow-hidden">
+    <div className="builder-scrollbar flex h-full snap-x snap-mandatory gap-2 overflow-x-auto overflow-y-hidden pb-1">
       {columns.map((column) => (
         <div
           key={`${column.label}-${column.primary}`}
-          className="min-w-0 rounded-xl bg-[var(--surface-muted)] p-3"
+          className="flex min-w-[7.75rem] flex-1 snap-start flex-col justify-center rounded-xl bg-[var(--surface-muted)] px-3 py-2.5"
         >
-          <p className="truncate text-xs text-[var(--muted)]">
+          <p className="text-xs leading-tight text-[var(--muted)]">
             {column.label}
           </p>
-          <p className="mt-1 truncate font-medium">
+          <p className="mt-1 whitespace-nowrap text-base font-medium">
             {column.primary}
           </p>
-          <p className="mt-1 truncate text-xs text-[var(--muted)]">
+          <p className="mt-1 whitespace-nowrap text-xs text-[var(--muted)]">
             {column.secondary}
           </p>
         </div>
