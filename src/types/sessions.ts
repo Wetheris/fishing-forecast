@@ -127,3 +127,53 @@ export type CatchDraft = {
   conditions: SessionConditionSnapshot;
   stampSettings: PhotoStampSettings;
 };
+
+
+export type DroneFishingDrop = {
+  id: string;
+  sessionId: string;
+  rodLabel: string;
+  dropNumber: number;
+  droppedAt: string;
+  retrievedAt: string | null;
+  originLatitude: number;
+  originLongitude: number;
+  latitude: number;
+  longitude: number;
+  distanceYards: number;
+  bearingDegrees: number;
+  bait: string | null;
+  sinkerOz: number | null;
+  estimatedDepthFt: number | null;
+  depthSource: "manual" | "unknown";
+  conditions: SessionConditionSnapshot;
+  biteAt: string | null;
+  caughtFishAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DroneFishingDropDraft = {
+  rodLabel: string;
+  dropNumber: number;
+  droppedAt: string;
+  originLatitude: number;
+  originLongitude: number;
+  latitude: number;
+  longitude: number;
+  distanceYards: number;
+  bearingDegrees: number;
+  bait?: string;
+  sinkerOz?: number;
+  estimatedDepthFt?: number;
+  conditions: SessionConditionSnapshot;
+  notes?: string;
+};
+
+export type DroneFishingDropUpdate = {
+  biteAt?: string | null;
+  caughtFishAt?: string | null;
+  retrievedAt?: string | null;
+  notes?: string | null;
+};

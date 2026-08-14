@@ -282,6 +282,31 @@ export function SessionDetailPage() {
               {session.notes}
             </p>
           ) : null}
+
+          <Link
+            href={`/sessions/${session.id}/drone`}
+            className="mt-4 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 transition hover:border-amber-300 hover:bg-amber-100/70"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
+              ◎
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">
+                  Drone Fishing
+                </h3>
+                <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                  Beta
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-amber-950/70">
+                Plan and track rod drops, coordinates, soak time, bites, and fish on a map.
+              </p>
+            </div>
+            <span className="text-xl text-amber-900/60">
+              ›
+            </span>
+          </Link>
         </section>
 
         <ConditionsCard

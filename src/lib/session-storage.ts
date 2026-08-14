@@ -6,6 +6,9 @@ import { normalizeCatchPhoto } from "@/lib/photo-stamp";
 import type {
   CatchDraft,
   FishingCatch,
+  DroneFishingDrop,
+  DroneFishingDropDraft,
+  DroneFishingDropUpdate,
   FishingSessionDetail,
   FishingSessionSummary,
   PhotoStampSettings,
@@ -42,6 +45,32 @@ type CatchRow = {
   original_photo_path: string | null;
   stamped_photo_path: string | null;
   created_at: string;
+};
+
+
+type DroneDropRow = {
+  id: string;
+  session_id: string;
+  rod_label: string;
+  drop_number: number;
+  dropped_at: string;
+  retrieved_at: string | null;
+  origin_latitude: number;
+  origin_longitude: number;
+  latitude: number;
+  longitude: number;
+  distance_yards: number;
+  bearing_degrees: number;
+  bait: string | null;
+  sinker_oz: number | null;
+  estimated_depth_ft: number | null;
+  depth_source: "manual" | "unknown";
+  conditions: unknown;
+  bite_at: string | null;
+  caught_fish_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export async function listFishingSessions(): Promise<
@@ -377,6 +406,113 @@ export async function createFishingCatch({
   return catchId;
 }
 
+
+export async function listDroneFishingDrops(
+  sessionId: string,
+): Promise<DroneFishingDrop[]> {
+  const supabase = getRequiredSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("fishing_drops")
+    .select(
+      "id, session_id, rod_label, drop_number, dropped_at, retrieved_at, origin_latitude, origin_longitude, latitude, longitude, distance_yards, bearing_degrees, bait, sinker_oz, estimated_depth_ft, depth_source, conditions, bite_at, caught_fish_at, notes, created_at, updated_at",
+    )
+    .eq("session_id", sessionId)
+    .order("dropped_at", {
+      ascending: false,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) =>
+    mapDroneDropRow(row as DroneDropRow),
+  );
+}
+
+export async function createDroneFishingDrop({
+  user,
+  sessionId,
+  draft,
+}: {
+  user: User;
+  sessionId: string;
+  draft: DroneFishingDropDraft;
+}): Promise<string> {
+  const supabase = getRequiredSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("fishing_drops")
+    .insert({
+      user_id: user.id,
+      session_id: sessionId,
+      rod_label: draft.rodLabel,
+      drop_number: draft.dropNumber,
+      dropped_at: draft.droppedAt,
+      origin_latitude: draft.originLatitude,
+      origin_longitude: draft.originLongitude,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      distance_yards: draft.distanceYards,
+      bearing_degrees: draft.bearingDegrees,
+      bait: draft.bait?.trim() || null,
+      sinker_oz: draft.sinkerOz ?? null,
+      estimated_depth_ft:
+        draft.estimatedDepthFt ?? null,
+      depth_source:
+        draft.estimatedDepthFt === undefined
+          ? "unknown"
+          : "manual",
+      conditions: draft.conditions,
+      notes: draft.notes?.trim() || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return String(data.id);
+}
+
+export async function updateDroneFishingDrop(
+  id: string,
+  updates: DroneFishingDropUpdate,
+): Promise<void> {
+  const supabase = getRequiredSupabaseClient();
+  const values: Record<string, unknown> = {};
+
+  if ("biteAt" in updates) {
+    values.bite_at = updates.biteAt ?? null;
+  }
+  if ("caughtFishAt" in updates) {
+    values.caught_fish_at =
+      updates.caughtFishAt ?? null;
+  }
+  if ("retrievedAt" in updates) {
+    values.retrieved_at =
+      updates.retrievedAt ?? null;
+  }
+  if ("notes" in updates) {
+    values.notes = updates.notes ?? null;
+  }
+
+  if (Object.keys(values).length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("fishing_drops")
+    .update(values)
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function createCatchPhotoSignedUrl(
   path: string,
   expiresInSeconds = 3600,
@@ -475,6 +611,65 @@ function mapCatchRow(
         ? null
         : String(row.stamped_photo_path),
     createdAt: String(row.created_at),
+  };
+}
+
+
+function mapDroneDropRow(
+  row: DroneDropRow,
+): DroneFishingDrop {
+  return {
+    id: String(row.id),
+    sessionId: String(row.session_id),
+    rodLabel: String(row.rod_label),
+    dropNumber: Number(row.drop_number),
+    droppedAt: String(row.dropped_at),
+    retrievedAt:
+      row.retrieved_at === null
+        ? null
+        : String(row.retrieved_at),
+    originLatitude:
+      Number(row.origin_latitude),
+    originLongitude:
+      Number(row.origin_longitude),
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    distanceYards:
+      Number(row.distance_yards),
+    bearingDegrees:
+      Number(row.bearing_degrees),
+    bait:
+      row.bait === null
+        ? null
+        : String(row.bait),
+    sinkerOz:
+      row.sinker_oz === null
+        ? null
+        : Number(row.sinker_oz),
+    estimatedDepthFt:
+      row.estimated_depth_ft === null
+        ? null
+        : Number(row.estimated_depth_ft),
+    depthSource:
+      row.depth_source === "manual"
+        ? "manual"
+        : "unknown",
+    conditions:
+      row.conditions as SessionConditionSnapshot,
+    biteAt:
+      row.bite_at === null
+        ? null
+        : String(row.bite_at),
+    caughtFishAt:
+      row.caught_fish_at === null
+        ? null
+        : String(row.caught_fish_at),
+    notes:
+      row.notes === null
+        ? null
+        : String(row.notes),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
   };
 }
 
