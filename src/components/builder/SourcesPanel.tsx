@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   DashboardSource,
   WidgetInstance,
@@ -13,6 +14,12 @@ import type { TideStationOption } from "@/types/tide-stations";
 import type { WeatherSourceStateMap } from "@/types/weather";
 import { TideStationEditor } from "@/components/sources/TideStationEditor";
 import { WeatherSourceEditor } from "@/components/sources/WeatherSourceEditor";
+
+type SourceIcon =
+  | "weather"
+  | "tides"
+  | "marine"
+  | "moon";
 
 export function SourcesPanel({
   sources,
@@ -61,16 +68,17 @@ export function SourcesPanel({
           Data sources
         </h2>
         <p className="mt-1 text-sm leading-5 text-[var(--muted)]">
-          Sources are grouped by what they power. Widgets can reuse
-          the same source or select a different compatible source.
+          Each section controls a different kind of fishing data.
+          Widgets reuse the matching source automatically.
         </p>
       </header>
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 space-y-5">
         <SourceGroup
-          step="1"
+          icon="weather"
           label="Weather & radar"
-          detail="Location used by weather, wind, forecast, and radar widgets."
+          provider="Open-Meteo + RainViewer"
+          detail="Weather, wind, forecasts, and radar use this location."
         >
           {weatherSource ? (
             <>
@@ -106,9 +114,10 @@ export function SourcesPanel({
         </SourceGroup>
 
         <SourceGroup
-          step="2"
+          icon="tides"
           label="Tides"
-          detail="NOAA stations used by tide widgets. You can keep more than one station."
+          provider="NOAA"
+          detail="Choose the tide station used by tide widgets. You can keep more than one."
         >
           <TideStationEditor
             sources={sources}
@@ -121,9 +130,10 @@ export function SourcesPanel({
         </SourceGroup>
 
         <SourceGroup
-          step="3"
+          icon="marine"
           label="Marine"
-          detail="Coordinates used for waves, swell, and modeled water temperature."
+          provider="Open-Meteo Marine"
+          detail="Wave, swell, and modeled water-temperature data use these coordinates."
         >
           <SourceList
             sources={marineSources}
@@ -135,9 +145,10 @@ export function SourcesPanel({
         </SourceGroup>
 
         <SourceGroup
-          step="4"
+          icon="moon"
           label="Moon & sun"
-          detail="Location used for moon phase, illumination, sunrise, sunset, moonrise, and moonset."
+          provider="Astronomy calculations"
+          detail="Moon phase, illumination, sunrise, sunset, moonrise, and moonset use this location."
         >
           <SourceList
             sources={astronomySources}
@@ -159,37 +170,119 @@ export function SourcesPanel({
 }
 
 function SourceGroup({
-  step,
+  icon,
   label,
+  provider,
   detail,
   children,
 }: {
-  step: string;
+  icon: SourceIcon;
   label: string;
+  provider: string;
   detail: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
-      <header className="border-b border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+      <header className="border-b border-[var(--border)] px-4 py-4">
         <div className="flex items-start gap-3">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] text-xs font-semibold text-[var(--accent)]">
-            {step}
-          </span>
-          <div className="min-w-0">
-            <h3 className="font-semibold">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--selection)] text-[var(--accent)]">
+            <SourceIconGraphic icon={icon} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">
+              {provider}
+            </p>
+            <h3 className="mt-0.5 text-base font-semibold">
               {label}
             </h3>
-            <p className="mt-0.5 text-xs leading-5 text-[var(--muted)]">
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
               {detail}
             </p>
           </div>
         </div>
       </header>
+
       <div className="p-4">
         {children}
       </div>
     </section>
+  );
+}
+
+function SourceIconGraphic({
+  icon,
+}: {
+  icon: SourceIcon;
+}) {
+  if (icon === "weather") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M6 18h11a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.2 8.1 5 5 0 0 0 6 18Z" />
+      </svg>
+    );
+  }
+
+  if (icon === "tides") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 8c2-2 4-2 6 0s4 2 6 0 4-2 4-2" />
+        <path d="M4 14c2-2 4-2 6 0s4 2 6 0 4-2 4-2" />
+        <path d="M12 19v-3" />
+        <path d="m9.5 18.5 2.5 2.5 2.5-2.5" />
+      </svg>
+    );
+  }
+
+  if (icon === "marine") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M3 16c3 0 3-3 6-3s3 3 6 3 3-3 6-3" />
+        <path d="M3 11c3 0 3-3 6-3s3 3 6 3 3-3 6-3" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 15.5A8 8 0 1 1 8.5 4 6.5 6.5 0 0 0 20 15.5Z" />
+    </svg>
   );
 }
 
@@ -254,7 +347,7 @@ function SourceList({
 function MissingSource({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <p className="rounded-xl border border-dashed border-[var(--border)] p-3 text-sm text-[var(--muted)]">

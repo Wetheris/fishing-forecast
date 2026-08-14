@@ -44,6 +44,11 @@ export function LayoutPanel({
     (preset) => preset.device === activeLayout.device,
   );
 
+  const selectedTheme =
+    dashboardThemes.find(
+      (option) => option.key === theme,
+    ) ?? dashboardThemes[0];
+
   return (
     <div>
       <header>
@@ -98,37 +103,42 @@ export function LayoutPanel({
           Theme colors apply to every dashboard layout.
         </p>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {dashboardThemes.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-pressed={theme === option.key}
-              onClick={() => onThemeChange(option.key)}
-              className={[
-                "rounded-xl border p-2 text-left",
-                theme === option.key
-                  ? "border-[var(--accent)] bg-[var(--selection)]"
-                  : "border-[var(--border)] hover:bg-[var(--surface-muted)]",
-              ].join(" ")}
+        <div className="mt-3 rounded-xl border border-[var(--border)] p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex shrink-0 gap-1">
+              {selectedTheme.swatches.map((swatch) => (
+                <span
+                  key={swatch}
+                  className="h-8 w-8 rounded-lg border border-black/10"
+                  style={{ backgroundColor: swatch }}
+                />
+              ))}
+            </div>
+
+            <select
+              aria-label="Dashboard theme"
+              value={theme}
+              onChange={(event) =>
+                onThemeChange(
+                  event.target.value as DashboardThemeKey,
+                )
+              }
+              className="min-w-0 flex-1 rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium"
             >
-              <span className="flex gap-1">
-                {option.swatches.map((swatch) => (
-                  <span
-                    key={swatch}
-                    className="h-5 flex-1 rounded-md border border-black/10"
-                    style={{ backgroundColor: swatch }}
-                  />
-                ))}
-              </span>
-              <span className="mt-2 block text-sm font-medium">
-                {option.name}
-              </span>
-              <span className="mt-0.5 block text-[11px] leading-4 text-[var(--muted)]">
-                {option.description}
-              </span>
-            </button>
-          ))}
+              {dashboardThemes.map((option) => (
+                <option
+                  key={option.key}
+                  value={option.key}
+                >
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+            {selectedTheme.description}
+          </p>
         </div>
       </section>
 
