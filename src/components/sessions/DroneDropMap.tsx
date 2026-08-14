@@ -137,14 +137,16 @@ export function DroneDropMap({
       }
 
       for (const drop of drops) {
+        const active =
+          drop.retrievedAt === null;
         const color =
           drop.caughtFishAt
             ? "#15803d"
             : drop.biteAt
               ? "#d97706"
-              : drop.retrievedAt
-                ? "#64748b"
-                : "#087f8c";
+              : active
+                ? "#087f8c"
+                : "#64748b";
 
         L.circleMarker(
           [
@@ -152,17 +154,18 @@ export function DroneDropMap({
             drop.longitude,
           ],
           {
-            radius: 10,
+            radius: active ? 10 : 7,
             color: "#ffffff",
-            weight: 3,
+            weight: active ? 3 : 2,
             fillColor: color,
-            fillOpacity: 1,
+            fillOpacity:
+              active ? 1 : 0.66,
           },
         )
           .bindTooltip(
             `${drop.rodLabel} · Drop ${drop.dropNumber}`,
             {
-              permanent: true,
+              permanent: active,
               direction: "top",
               offset: [0, -8],
             },

@@ -10,6 +10,7 @@ import type {
   DroneFishingDrop,
   DroneFishingDropDraft,
   DroneFishingDropUpdate,
+  DroneFishingRod,
   FishingCatchDetailsUpdate,
   FishingSessionDetail,
   FishingSessionSummary,
@@ -55,6 +56,7 @@ type CatchRow = {
 type DroneDropRow = {
   id: string;
   session_id: string;
+  rod_id: string;
   rod_label: string;
   drop_number: number;
   dropped_at: string;
@@ -75,6 +77,16 @@ type DroneDropRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+
+type DroneRodRow = {
+  id: string;
+  session_id: string;
+  label: string;
+  sort_order: number;
+  created_at: string;
+  retired_at: string | null;
 };
 
 export async function listFishingSessions(): Promise<
@@ -555,6 +567,82 @@ export async function updateFishingCatchDetails({
   }
 }
 
+
+export async function listDroneFishingRods(
+  sessionId: string,
+): Promise<DroneFishingRod[]> {
+  const supabase = getRequiredSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("fishing_rods")
+    .select(
+      "id, session_id, label, sort_order, created_at, retired_at",
+    )
+    .eq("session_id", sessionId)
+    .order("sort_order", {
+      ascending: true,
+    })
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) =>
+    mapDroneRodRow(row as DroneRodRow),
+  );
+}
+
+export async function createDroneFishingRod({
+  user,
+  sessionId,
+  label,
+  sortOrder,
+}: {
+  user: User;
+  sessionId: string;
+  label: string;
+  sortOrder: number;
+}): Promise<string> {
+  const supabase = getRequiredSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("fishing_rods")
+    .insert({
+      session_id: sessionId,
+      user_id: user.id,
+      label: label.trim(),
+      sort_order: sortOrder,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return String(data.id);
+}
+
+export async function retireDroneFishingRod(
+  id: string,
+): Promise<void> {
+  const supabase = getRequiredSupabaseClient();
+
+  const { error } = await supabase
+    .from("fishing_rods")
+    .update({
+      retired_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function listDroneFishingDrops(
   sessionId: string,
 ): Promise<DroneFishingDrop[]> {
@@ -563,7 +651,7 @@ export async function listDroneFishingDrops(
   const { data, error } = await supabase
     .from("fishing_drops")
     .select(
-      "id, session_id, rod_label, drop_number, dropped_at, retrieved_at, origin_latitude, origin_longitude, latitude, longitude, distance_yards, bearing_degrees, bait, sinker_oz, estimated_depth_ft, depth_source, conditions, bite_at, caught_fish_at, notes, created_at, updated_at",
+      "id, session_id, rod_id, rod_label, drop_number, dropped_at, retrieved_at, origin_latitude, origin_longitude, latitude, longitude, distance_yards, bearing_degrees, bait, sinker_oz, estimated_depth_ft, depth_source, conditions, bite_at, caught_fish_at, notes, created_at, updated_at",
     )
     .eq("session_id", sessionId)
     .order("dropped_at", {
@@ -595,6 +683,7 @@ export async function createDroneFishingDrop({
     .insert({
       user_id: user.id,
       session_id: sessionId,
+      rod_id: draft.rodId,
       rod_label: draft.rodLabel,
       drop_number: draft.dropNumber,
       dropped_at: draft.droppedAt,
@@ -771,12 +860,30 @@ function mapCatchRow(
 }
 
 
+
+function mapDroneRodRow(
+  row: DroneRodRow,
+): DroneFishingRod {
+  return {
+    id: String(row.id),
+    sessionId: String(row.session_id),
+    label: String(row.label),
+    sortOrder: Number(row.sort_order),
+    createdAt: String(row.created_at),
+    retiredAt:
+      row.retired_at === null
+        ? null
+        : String(row.retired_at),
+  };
+}
+
 function mapDroneDropRow(
   row: DroneDropRow,
 ): DroneFishingDrop {
   return {
     id: String(row.id),
     sessionId: String(row.session_id),
+    rodId: String(row.rod_id),
     rodLabel: String(row.rod_label),
     dropNumber: Number(row.drop_number),
     droppedAt: String(row.dropped_at),

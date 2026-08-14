@@ -135,9 +135,19 @@ export type CatchDraft = {
 };
 
 
+export type DroneFishingRod = {
+  id: string;
+  sessionId: string;
+  label: string;
+  sortOrder: number;
+  createdAt: string;
+  retiredAt: string | null;
+};
+
 export type DroneFishingDrop = {
   id: string;
   sessionId: string;
+  rodId: string;
   rodLabel: string;
   dropNumber: number;
   droppedAt: string;
@@ -161,6 +171,7 @@ export type DroneFishingDrop = {
 };
 
 export type DroneFishingDropDraft = {
+  rodId: string;
   rodLabel: string;
   dropNumber: number;
   droppedAt: string;

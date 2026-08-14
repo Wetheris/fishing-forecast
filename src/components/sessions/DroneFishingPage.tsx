@@ -17,8 +17,11 @@ import { DroneCatchDetailsDialog } from "@/components/sessions/DroneCatchDetails
 import {
   createDroneCatchFromDrop,
   createDroneFishingDrop,
+  createDroneFishingRod,
   listDroneFishingDrops,
+  listDroneFishingRods,
   loadFishingSession,
+  retireDroneFishingRod,
   updateDroneFishingDrop,
 } from "@/lib/session-storage";
 import {
@@ -26,6 +29,7 @@ import {
 } from "@/lib/session-conditions";
 import type {
   DroneFishingDrop,
+  DroneFishingRod,
   FishingCatch,
   FishingSessionDetail,
   SessionConditionSnapshot,
@@ -57,6 +61,9 @@ export function DroneFishingPage() {
     useState<FishingSessionDetail>();
   const [drops, setDrops] =
     useState<DroneFishingDrop[]>([]);
+  const [rods, setRods] =
+    useState<DroneFishingRod[]>([]);
+
   const [loading, setLoading] =
     useState(true);
   const [error, setError] =
@@ -70,7 +77,9 @@ export function DroneFishingPage() {
   const [userLocation, setUserLocation] =
     useState<Point>();
   const [locationStatus, setLocationStatus] =
-    useState("Waiting for GPS permission…");
+    useState(
+      "Waiting for GPS permission…",
+    );
   const [
     selectedLocation,
     setSelectedLocation,
@@ -82,16 +91,19 @@ export function DroneFishingPage() {
     setConditionsLoading,
   ] = useState(false);
 
-  const [rodLabel, setRodLabel] =
-    useState("Rod 1");
+  const [planningRodId, setPlanningRodId] =
+    useState<string>();
   const [bait, setBait] =
     useState("");
   const [sinkerOz, setSinkerOz] =
     useState("");
-  const [estimatedDepthFt, setEstimatedDepthFt] =
-    useState("");
+  const [
+    estimatedDepthFt,
+    setEstimatedDepthFt,
+  ] = useState("");
   const [notes, setNotes] =
     useState("");
+
   const [saving, setSaving] =
     useState(false);
   const [status, setStatus] =
@@ -139,6 +151,7 @@ export function DroneFishingPage() {
         const [
           loadedSession,
           loadedDrops,
+          loadedRods,
         ] = await Promise.all([
           loadFishingSession(
             sessionId,
@@ -146,10 +159,14 @@ export function DroneFishingPage() {
           listDroneFishingDrops(
             sessionId,
           ),
+          listDroneFishingRods(
+            sessionId,
+          ),
         ]);
 
         setSession(loadedSession);
         setDrops(loadedDrops);
+        setRods(loadedRods);
 
         if (!userLocation) {
           setUserLocation({
@@ -212,28 +229,23 @@ export function DroneFishingPage() {
     user,
   ]);
 
-  const nextDropNumber =
-    useMemo(() => {
-      const sameRod =
-        drops.filter(
-          (drop) =>
-            drop.rodLabel === rodLabel,
-        );
+  const activeRods =
+    useMemo(
+      () =>
+        rods.filter(
+          (rod) =>
+            rod.retiredAt === null,
+        ),
+      [rods],
+    );
 
-      return (
-        sameRod.reduce(
-          (maximum, drop) =>
-            Math.max(
-              maximum,
-              drop.dropNumber,
-            ),
-          0,
-        ) + 1
-      );
-    }, [
-      drops,
-      rodLabel,
-    ]);
+  const planningRod =
+    planningRodId
+      ? rods.find(
+          (rod) =>
+            rod.id === planningRodId,
+        )
+      : undefined;
 
   const selectedGeometry =
     userLocation &&
@@ -243,6 +255,27 @@ export function DroneFishingPage() {
           selectedLocation,
         )
       : null;
+
+  const nextDropNumber =
+    planningRod
+      ? drops.reduce(
+          (maximum, drop) =>
+            drop.rodId ===
+            planningRod.id
+              ? Math.max(
+                  maximum,
+                  drop.dropNumber,
+                )
+              : maximum,
+          0,
+        ) + 1
+      : 1;
+
+  const pastDrops =
+    drops.filter(
+      (drop) =>
+        drop.retrievedAt !== null,
+    );
 
   async function requestGps() {
     setLocationStatus(
@@ -317,16 +350,145 @@ export function DroneFishingPage() {
     }
   }
 
+  async function addRod() {
+    if (!user || !session) {
+      return;
+    }
+
+    setSaving(true);
+    setError(undefined);
+
+    try {
+      const label =
+        nextRodLabel(rods);
+      const sortOrder =
+        rods.reduce(
+          (maximum, rod) =>
+            Math.max(
+              maximum,
+              rod.sortOrder,
+            ),
+          0,
+        ) + 1;
+
+      await createDroneFishingRod({
+        user,
+        sessionId: session.id,
+        label,
+        sortOrder,
+      });
+
+      setStatus(
+        `${label} added.`,
+      );
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to add a rod.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startPlanning(
+    rod: DroneFishingRod,
+  ) {
+    const activeDrop =
+      currentDropForRod(
+        drops,
+        rod.id,
+      );
+
+    if (activeDrop) {
+      setError(
+        `${rod.label} already has an active drop. Reel it in before making another drop.`,
+      );
+      return;
+    }
+
+    const latestDrop =
+      latestDropForRod(
+        drops,
+        rod.id,
+      );
+
+    setPlanningRodId(
+      rod.id,
+    );
+    setSelectedLocation(
+      undefined,
+    );
+    setBait(
+      latestDrop?.bait ?? "",
+    );
+    setSinkerOz(
+      latestDrop?.sinkerOz?.toString() ??
+        "",
+    );
+    setEstimatedDepthFt(
+      latestDrop
+        ?.estimatedDepthFt
+        ?.toString() ?? "",
+    );
+    setNotes("");
+    setError(undefined);
+    setStatus(
+      `Planning ${rod.label}. Tap the map to choose the next drop point.`,
+    );
+  }
+
+  function cancelPlanning() {
+    setPlanningRodId(
+      undefined,
+    );
+    setSelectedLocation(
+      undefined,
+    );
+    setStatus(undefined);
+  }
+
+  function selectDropPoint(
+    point: Point,
+  ) {
+    if (!planningRod) {
+      setStatus(
+        "Choose a ready rod first, then tap the map to place its next drop.",
+      );
+      return;
+    }
+
+    setSelectedLocation(point);
+    setStatus(
+      `${planningRod.label} drop point selected.`,
+    );
+  }
+
   async function saveDrop() {
     if (
       !user ||
       !session ||
+      !planningRod ||
       !userLocation ||
       !selectedLocation ||
       !selectedGeometry
     ) {
       setError(
-        "Tap the map to choose a drop point first.",
+        "Choose a rod and tap the map to select a drop point first.",
+      );
+      return;
+    }
+
+    if (
+      currentDropForRod(
+        drops,
+        planningRod.id,
+      )
+    ) {
+      setError(
+        `${planningRod.label} already has an active drop.`,
       );
       return;
     }
@@ -355,7 +517,10 @@ export function DroneFishingPage() {
         sessionId:
           session.id,
         draft: {
-          rodLabel,
+          rodId:
+            planningRod.id,
+          rodLabel:
+            planningRod.label,
           dropNumber:
             nextDropNumber,
           droppedAt,
@@ -391,9 +556,14 @@ export function DroneFishingPage() {
 
       setLiveConditions(conditions);
       setStatus(
-        `${rodLabel} drop ${nextDropNumber} saved.`,
+        `${planningRod.label} drop ${nextDropNumber} is now soaking.`,
       );
-      setSelectedLocation(undefined);
+      setPlanningRodId(
+        undefined,
+      );
+      setSelectedLocation(
+        undefined,
+      );
       setNotes("");
       await refresh();
     } catch (caught) {
@@ -401,6 +571,60 @@ export function DroneFishingPage() {
         caught instanceof Error
           ? caught.message
           : "Unable to save this drop.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function retireRod(
+    rod: DroneFishingRod,
+  ) {
+    if (
+      currentDropForRod(
+        drops,
+        rod.id,
+      )
+    ) {
+      setError(
+        `Reel in ${rod.label} before retiring it.`,
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Retire ${rod.label}? Its previous drops and catches will stay in your history.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSaving(true);
+    setError(undefined);
+
+    try {
+      await retireDroneFishingRod(
+        rod.id,
+      );
+
+      if (
+        planningRodId ===
+        rod.id
+      ) {
+        cancelPlanning();
+      }
+
+      setStatus(
+        `${rod.label} retired. Its history was kept.`,
+      );
+      await refresh();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to retire this rod.",
       );
     } finally {
       setSaving(false);
@@ -479,10 +703,12 @@ export function DroneFishingPage() {
           drop.id,
           {
             retrievedAt:
-              drop.retrievedAt
-                ? null
-                : eventTime,
+              eventTime,
           },
+        );
+
+        setStatus(
+          `${drop.rodLabel} is ready for its next drop.`,
         );
       }
 
@@ -491,7 +717,7 @@ export function DroneFishingPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to update this drop.",
+          : "Unable to update this rod.",
       );
     }
   }
@@ -535,7 +761,7 @@ export function DroneFishingPage() {
             Sign in to use Drone Fishing
           </h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Drone drop history is private to your account.
+            Drone rod and drop history is private to your account.
           </p>
           <button
             type="button"
@@ -637,7 +863,9 @@ export function DroneFishingPage() {
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)]">
           <div className="grid gap-3">
             <DroneDropMap
-              userLocation={mapLocation}
+              userLocation={
+                mapLocation
+              }
               selectedLocation={
                 selectedLocation
               }
@@ -648,12 +876,12 @@ export function DroneFishingPage() {
                   ?.windDirectionDegrees
               }
               onSelect={
-                setSelectedLocation
+                selectDropPoint
               }
             />
 
             <p className="text-xs text-[var(--muted)]">
-              Tap the map to place the next drop. Existing drops stay on the map so you can compare Rod 1, Rod 2, and previous attempts.
+              Choose a ready rod, then tap the map to place its next drop. Active drops stay labeled; previous drops remain available as quieter history points.
             </p>
           </div>
 
@@ -671,256 +899,203 @@ export function DroneFishingPage() {
               }
             />
 
-            <section className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold">
-                    New drop
-                  </h2>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {locationStatus}
-                  </p>
-                </div>
-                <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-medium">
-                  {rodLabel} · #{nextDropNumber}
-                </span>
-              </div>
-
-              {!selectedLocation ||
-              !selectedGeometry ? (
-                <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] p-5 text-center text-sm text-[var(--muted)]">
-                  Tap a point on the map to choose your drop.
-                </div>
-              ) : (
-                <div className="mt-4 grid gap-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Stat
-                      label="Distance"
-                      value={
-                        selectedGeometry.distanceYards >=
-                        1760
-                          ? `${(
-                              selectedGeometry.distanceYards /
-                              1760
-                            ).toFixed(2)} mi`
-                          : `${Math.round(
-                              selectedGeometry.distanceYards,
-                            )} yd`
-                      }
-                    />
-                    <Stat
-                      label="Bearing"
-                      value={`${Math.round(
-                        selectedGeometry.bearingDegrees,
-                      )}° ${compassDirection(
-                        selectedGeometry.bearingDegrees,
-                      )}`}
-                    />
-                  </div>
-
-                  <div className="rounded-xl bg-[var(--surface-muted)] p-3">
-                    <p className="text-xs text-[var(--muted)]">
-                      Drop coordinates
-                    </p>
-                    <p className="mt-1 break-all font-mono text-sm font-semibold">
-                      {selectedLocation.latitude.toFixed(
-                        6,
-                      )}
-                      ,{" "}
-                      {selectedLocation.longitude.toFixed(
-                        6,
-                      )}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void copyCoordinates(
-                          selectedLocation,
-                        ).then(() =>
-                          setStatus(
-                            "Coordinates copied.",
-                          ),
-                        )
-                      }
-                      className="mt-2 text-xs font-medium text-[var(--accent)]"
-                    >
-                      Copy coordinates
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="text-sm">
-                      <span className="font-medium">
-                        Rod
-                      </span>
-                      <select
-                        value={rodLabel}
-                        onChange={(event) =>
-                          setRodLabel(
-                            event.target.value,
-                          )
-                        }
-                        className="mt-1.5 w-full rounded-xl border border-[var(--border)] bg-white px-3 py-2.5"
-                      >
-                        <option>Rod 1</option>
-                        <option>Rod 2</option>
-                        <option>Rod 3</option>
-                        <option>Rod 4</option>
-                      </select>
-                    </label>
-
-                    <label className="text-sm">
-                      <span className="font-medium">
-                        Weight
-                      </span>
-                      <div className="relative mt-1.5">
-                        <input
-                          inputMode="decimal"
-                          value={sinkerOz}
-                          onChange={(event) =>
-                            setSinkerOz(
-                              event.target.value,
-                            )
-                          }
-                          placeholder="8"
-                          className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 pr-9"
-                        />
-                        <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-[var(--muted)]">
-                          oz
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      Bait
-                    </span>
-                    <input
-                      value={bait}
-                      onChange={(event) =>
-                        setBait(
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Bunker chunk, mullet, clam..."
-                      className="mt-1.5 w-full rounded-xl border border-[var(--border)] px-3 py-2.5"
-                    />
-                  </label>
-
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      Estimated depth
-                      <span className="ml-1 font-normal text-[var(--muted)]">
-                        (optional)
-                      </span>
-                    </span>
-                    <div className="relative mt-1.5">
-                      <input
-                        inputMode="decimal"
-                        value={
-                          estimatedDepthFt
-                        }
-                        onChange={(event) =>
-                          setEstimatedDepthFt(
-                            event.target.value,
-                          )
-                        }
-                        placeholder="Manual for beta"
-                        className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 pr-8"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-[var(--muted)]">
-                        ft
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                      Bathymetry lookup is not connected yet. Any value entered here is your own estimate.
-                    </p>
-                  </label>
-
-                  <label className="text-sm">
-                    <span className="font-medium">
-                      Notes
-                    </span>
-                    <textarea
-                      value={notes}
-                      onChange={(event) =>
-                        setNotes(
-                          event.target.value,
-                        )
-                      }
-                      rows={2}
-                      placeholder="Rig, target, trough/bar notes..."
-                      className="mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] px-3 py-2.5"
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void saveDrop()
-                    }
-                    disabled={saving}
-                    className="rounded-xl bg-[var(--accent)] px-4 py-3 font-medium text-white disabled:opacity-50"
-                  >
-                    {saving
-                      ? "Saving drop…"
-                      : `Save ${rodLabel} drop`}
-                  </button>
-                </div>
-              )}
-            </section>
+            {planningRod ? (
+              <DropPlanner
+                rod={planningRod}
+                dropNumber={
+                  nextDropNumber
+                }
+                locationStatus={
+                  locationStatus
+                }
+                selectedLocation={
+                  selectedLocation
+                }
+                geometry={
+                  selectedGeometry
+                }
+                bait={bait}
+                sinkerOz={sinkerOz}
+                estimatedDepthFt={
+                  estimatedDepthFt
+                }
+                notes={notes}
+                saving={saving}
+                onBaitChange={
+                  setBait
+                }
+                onSinkerChange={
+                  setSinkerOz
+                }
+                onDepthChange={
+                  setEstimatedDepthFt
+                }
+                onNotesChange={
+                  setNotes
+                }
+                onCopy={() => {
+                  if (
+                    selectedLocation
+                  ) {
+                    void copyCoordinates(
+                      selectedLocation,
+                    ).then(() =>
+                      setStatus(
+                        "Coordinates copied.",
+                      ),
+                    );
+                  }
+                }}
+                onSave={() =>
+                  void saveDrop()
+                }
+                onCancel={
+                  cancelPlanning
+                }
+              />
+            ) : (
+              <section className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)]">
+                Select <strong className="font-medium text-[var(--foreground)]">Set next drop</strong> on a ready rod to begin planning.
+              </section>
+            )}
           </div>
         </section>
 
         <section>
-          <div className="mb-3">
-            <h2 className="text-lg font-semibold">
-              Drop history
-            </h2>
-            <p className="text-sm text-[var(--muted)]">
-              {drops.length}{" "}
-              {drops.length === 1
-                ? "drop"
-                : "drops"}{" "}
-              recorded in this session
-            </p>
-          </div>
-
-          {drops.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
-              <h3 className="font-semibold">
-                No drops yet
-              </h3>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Pick a point on the map and save your first drone drop.
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">
+                Active rods
+              </h2>
+              <p className="text-sm text-[var(--muted)]">
+                One persistent card per rod. Reeling in makes the rod ready again.
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                void addRod()
+              }
+              disabled={saving}
+              className="shrink-0 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              + Add rod
+            </button>
+          </div>
+
+          {activeRods.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
+              <h3 className="font-semibold">
+                Add your first rod
+              </h3>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Rods stay open for the session until you retire them.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  void addRod()
+                }
+                className="mt-4 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+              >
+                + Add rod
+              </button>
+            </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {drops.map((drop) => (
-                <DropCard
-                  key={drop.id}
-                  drop={drop}
-                  catchItem={
-                    session.catches.find(
-                      (catchItem) =>
-                        catchItem.droneDropId ===
-                        drop.id,
-                    )
-                  }
-                  now={now}
-                  onAction={
-                    markDrop
-                  }
-                  onEditCatch={
-                    setEditingCatch
-                  }
-                />
-              ))}
+            <div className="grid gap-3 lg:grid-cols-2">
+              {activeRods.map(
+                (rod) => {
+                  const activeDrop =
+                    currentDropForRod(
+                      drops,
+                      rod.id,
+                    );
+                  const catchItem =
+                    activeDrop
+                      ? session.catches.find(
+                          (item) =>
+                            item.droneDropId ===
+                            activeDrop.id,
+                        )
+                      : undefined;
+
+                  return (
+                    <RodCard
+                      key={rod.id}
+                      rod={rod}
+                      drop={activeDrop}
+                      catchItem={
+                        catchItem
+                      }
+                      now={now}
+                      planning={
+                        planningRodId ===
+                        rod.id
+                      }
+                      onPlan={() =>
+                        startPlanning(
+                          rod,
+                        )
+                      }
+                      onAction={
+                        markDrop
+                      }
+                      onEditCatch={
+                        setEditingCatch
+                      }
+                      onRetire={() =>
+                        void retireRod(
+                          rod,
+                        )
+                      }
+                    />
+                  );
+                },
+              )}
             </div>
           )}
         </section>
+
+        <details className="rounded-2xl border border-[var(--border)] bg-white shadow-sm">
+          <summary className="cursor-pointer list-none px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">
+                  Past drops
+                </h2>
+                <p className="mt-1 text-sm text-[var(--muted)]">
+                  {pastDrops.length} retrieved{" "}
+                  {pastDrops.length === 1
+                    ? "drop"
+                    : "drops"}
+                </p>
+              </div>
+              <span className="text-xl text-[var(--muted)]">
+                ⌄
+              </span>
+            </div>
+          </summary>
+
+          <div className="border-t border-[var(--border)] p-3">
+            {pastDrops.length === 0 ? (
+              <p className="p-3 text-sm text-[var(--muted)]">
+                Retrieved drops will appear here.
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                {pastDrops.map(
+                  (drop) => (
+                    <PastDropRow
+                      key={drop.id}
+                      drop={drop}
+                    />
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        </details>
       </div>
 
       {editingCatch ? (
@@ -1086,16 +1261,25 @@ function ConditionsPanel({
   );
 }
 
-function DropCard({
+
+
+function RodCard({
+  rod,
   drop,
   catchItem,
   now,
+  planning,
+  onPlan,
   onAction,
   onEditCatch,
+  onRetire,
 }: {
-  drop: DroneFishingDrop;
+  rod: DroneFishingRod;
+  drop?: DroneFishingDrop;
   catchItem?: FishingCatch;
   now: number;
+  planning: boolean;
+  onPlan: () => void;
   onAction: (
     drop: DroneFishingDrop,
     action:
@@ -1106,7 +1290,62 @@ function DropCard({
   onEditCatch: (
     catchItem: FishingCatch,
   ) => void;
+  onRetire: () => void;
 }) {
+  if (!drop) {
+    return (
+      <article className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <RodBadge
+            label={rod.label}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold">
+                {rod.label}
+              </h3>
+              <span className={[
+                "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                planning
+                  ? "bg-sky-50 text-sky-700"
+                  : "bg-slate-100 text-slate-600",
+              ].join(" ")}>
+                {planning
+                  ? "Planning"
+                  : "Ready"}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              {planning
+                ? "Tap the map to choose this rod's next drop."
+                : "No bait is currently soaking on this rod."}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onPlan}
+            className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-medium text-white"
+          >
+            {planning
+              ? "Planning next drop…"
+              : "Set next drop"}
+          </button>
+
+          <button
+            type="button"
+            onClick={onRetire}
+            className="rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm font-medium text-[var(--muted)]"
+          >
+            Retire rod
+          </button>
+        </div>
+      </article>
+    );
+  }
+
   const endTime =
     drop.retrievedAt
       ? new Date(
@@ -1126,24 +1365,22 @@ function DropCard({
   return (
     <article className="rounded-2xl border border-[var(--border)] bg-white p-4 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--selection)] font-bold text-[var(--accent)]">
-          {drop.rodLabel.replace(
-            "Rod ",
-            "R",
-          )}
-        </div>
+        <RodBadge
+          label={rod.label}
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">
-              {drop.rodLabel} · Drop{" "}
-              {drop.dropNumber}
+              {rod.label}
             </h3>
-            <DropStatus drop={drop} />
+            <DropStatus
+              drop={drop}
+            />
           </div>
 
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Soak{" "}
+            Drop {drop.dropNumber} · Soak{" "}
             <strong className="font-medium text-[var(--foreground)]">
               {formatDuration(soak)}
             </strong>
@@ -1259,16 +1496,9 @@ function DropCard({
               "retrieve",
             )
           }
-          className={[
-            "rounded-xl border px-3 py-2 text-xs font-medium",
-            drop.retrievedAt
-              ? "border-slate-300 bg-slate-100 text-slate-700"
-              : "border-[var(--border)]",
-          ].join(" ")}
+          className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium"
         >
-          {drop.retrievedAt
-            ? "Reopen drop"
-            : "Reel in"}
+          Reel in
         </button>
       </div>
 
@@ -1289,6 +1519,7 @@ function DropCard({
               mph
             </span>
           ) : null}
+
           {drop.conditions.tide ? (
             <span className="rounded-full bg-[var(--surface-muted)] px-2.5 py-1 capitalize">
               Tide{" "}
@@ -1301,6 +1532,315 @@ function DropCard({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function DropPlanner({
+  rod,
+  dropNumber,
+  locationStatus,
+  selectedLocation,
+  geometry,
+  bait,
+  sinkerOz,
+  estimatedDepthFt,
+  notes,
+  saving,
+  onBaitChange,
+  onSinkerChange,
+  onDepthChange,
+  onNotesChange,
+  onCopy,
+  onSave,
+  onCancel,
+}: {
+  rod: DroneFishingRod;
+  dropNumber: number;
+  locationStatus: string;
+  selectedLocation?: Point;
+  geometry:
+    | {
+        distanceYards: number;
+        bearingDegrees: number;
+      }
+    | null;
+  bait: string;
+  sinkerOz: string;
+  estimatedDepthFt: string;
+  notes: string;
+  saving: boolean;
+  onBaitChange: (value: string) => void;
+  onSinkerChange: (value: string) => void;
+  onDepthChange: (value: string) => void;
+  onNotesChange: (value: string) => void;
+  onCopy: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-[var(--accent)] bg-white p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <RodBadge
+          label={rod.label}
+        />
+
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold">
+            Plan {rod.label} · Drop{" "}
+            {dropNumber}
+          </h2>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {locationStatus}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium"
+        >
+          Cancel
+        </button>
+      </div>
+
+      {!selectedLocation ||
+      !geometry ? (
+        <div className="mt-4 rounded-xl border border-dashed border-[var(--border)] p-5 text-center text-sm text-[var(--muted)]">
+          Tap the map to choose where{" "}
+          {rod.label} will be dropped.
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4">
+          <div className="grid grid-cols-2 gap-2">
+            <Stat
+              label="Distance"
+              value={
+                geometry.distanceYards >=
+                1760
+                  ? `${(
+                      geometry.distanceYards /
+                      1760
+                    ).toFixed(2)} mi`
+                  : `${Math.round(
+                      geometry.distanceYards,
+                    )} yd`
+              }
+            />
+            <Stat
+              label="Bearing"
+              value={`${Math.round(
+                geometry.bearingDegrees,
+              )}° ${compassDirection(
+                geometry.bearingDegrees,
+              )}`}
+            />
+          </div>
+
+          <div className="rounded-xl bg-[var(--surface-muted)] p-3">
+            <p className="text-xs text-[var(--muted)]">
+              Drop coordinates
+            </p>
+            <p className="mt-1 break-all font-mono text-sm font-semibold">
+              {selectedLocation.latitude.toFixed(
+                6,
+              )}
+              ,{" "}
+              {selectedLocation.longitude.toFixed(
+                6,
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={onCopy}
+              className="mt-2 text-xs font-medium text-[var(--accent)]"
+            >
+              Copy coordinates
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-sm">
+              <span className="font-medium">
+                Weight
+              </span>
+              <div className="relative mt-1.5">
+                <input
+                  inputMode="decimal"
+                  value={sinkerOz}
+                  onChange={(event) =>
+                    onSinkerChange(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="8"
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 pr-9"
+                />
+                <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-[var(--muted)]">
+                  oz
+                </span>
+              </div>
+            </label>
+
+            <label className="text-sm">
+              <span className="font-medium">
+                Estimated depth
+              </span>
+              <div className="relative mt-1.5">
+                <input
+                  inputMode="decimal"
+                  value={
+                    estimatedDepthFt
+                  }
+                  onChange={(event) =>
+                    onDepthChange(
+                      event.target.value,
+                    )
+                  }
+                  placeholder="Optional"
+                  className="w-full rounded-xl border border-[var(--border)] px-3 py-2.5 pr-8"
+                />
+                <span className="pointer-events-none absolute right-3 top-2.5 text-sm text-[var(--muted)]">
+                  ft
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <label className="text-sm">
+            <span className="font-medium">
+              Bait
+            </span>
+            <input
+              value={bait}
+              onChange={(event) =>
+                onBaitChange(
+                  event.target.value,
+                )
+              }
+              placeholder="Bunker chunk, mullet, clam..."
+              className="mt-1.5 w-full rounded-xl border border-[var(--border)] px-3 py-2.5"
+            />
+          </label>
+
+          <label className="text-sm">
+            <span className="font-medium">
+              Notes
+            </span>
+            <textarea
+              value={notes}
+              onChange={(event) =>
+                onNotesChange(
+                  event.target.value,
+                )
+              }
+              rows={2}
+              placeholder="Rig, target, trough/bar notes..."
+              className="mt-1.5 w-full resize-none rounded-xl border border-[var(--border)] px-3 py-2.5"
+            />
+          </label>
+
+          <p className="text-[11px] leading-4 text-[var(--muted)]">
+            Bathymetry lookup is not connected yet. Any depth entered here is your own estimate.
+          </p>
+
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-xl bg-[var(--accent)] px-4 py-3 font-medium text-white disabled:opacity-50"
+          >
+            {saving
+              ? "Saving drop…"
+              : `Drop ${rod.label}`}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PastDropRow({
+  drop,
+}: {
+  drop: DroneFishingDrop;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-[var(--surface-muted)] p-3">
+      <RodBadge
+        label={drop.rodLabel}
+        small
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-medium">
+            {drop.rodLabel} · Drop{" "}
+            {drop.dropNumber}
+          </p>
+          {drop.caughtFishAt ? (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700">
+              Fish
+            </span>
+          ) : drop.biteAt ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+              Bite
+            </span>
+          ) : null}
+        </div>
+
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          {Math.round(
+            drop.distanceYards,
+          )}{" "}
+          yd ·{" "}
+          {Math.round(
+            drop.bearingDegrees,
+          )}
+          °{" "}
+          {compassDirection(
+            drop.bearingDegrees,
+          )}
+          {drop.bait
+            ? ` · ${drop.bait}`
+            : ""}
+        </p>
+      </div>
+
+      <p className="shrink-0 text-xs text-[var(--muted)]">
+        {formatShortTime(
+          drop.retrievedAt ??
+            drop.droppedAt,
+        )}
+      </p>
+    </div>
+  );
+}
+
+function RodBadge({
+  label,
+  small = false,
+}: {
+  label: string;
+  small?: boolean;
+}) {
+  const short =
+    label.match(
+      /(\d+)/,
+    )?.[1];
+
+  return (
+    <div
+      className={[
+        "flex shrink-0 items-center justify-center rounded-2xl bg-[var(--selection)] font-bold text-[var(--accent)]",
+        small
+          ? "h-9 w-9 text-sm"
+          : "h-12 w-12 text-lg",
+      ].join(" ")}
+    >
+      {short
+        ? `R${short}`
+        : label.slice(0, 2)}
+    </div>
   );
 }
 
@@ -1327,18 +1867,14 @@ function DropStatus({
       ? "bg-green-50 text-green-700"
       : drop.biteAt
         ? "bg-amber-50 text-amber-700"
-        : drop.retrievedAt
-          ? "bg-slate-100 text-slate-600"
-          : "bg-emerald-50 text-emerald-700";
+        : "bg-emerald-50 text-emerald-700";
 
   const label =
     drop.caughtFishAt
       ? "Fish"
       : drop.biteAt
         ? "Bite"
-        : drop.retrievedAt
-          ? "Retrieved"
-          : "Soaking";
+        : "Soaking";
 
   return (
     <span
@@ -1348,6 +1884,76 @@ function DropStatus({
     </span>
   );
 }
+
+function currentDropForRod(
+  drops: DroneFishingDrop[],
+  rodId: string,
+): DroneFishingDrop | undefined {
+  return drops.find(
+    (drop) =>
+      drop.rodId === rodId &&
+      drop.retrievedAt === null,
+  );
+}
+
+function latestDropForRod(
+  drops: DroneFishingDrop[],
+  rodId: string,
+): DroneFishingDrop | undefined {
+  return drops.find(
+    (drop) =>
+      drop.rodId === rodId,
+  );
+}
+
+function nextRodLabel(
+  rods: DroneFishingRod[],
+): string {
+  const used = new Set(
+    rods
+      .map((rod) =>
+        rod.label.match(
+          /^Rod\s+(\d+)$/i,
+        )?.[1],
+      )
+      .filter(
+        (value): value is string =>
+          Boolean(value),
+      )
+      .map(Number),
+  );
+
+  let number = 1;
+
+  while (used.has(number)) {
+    number += 1;
+  }
+
+  return `Rod ${number}`;
+}
+
+function formatShortTime(
+  value: string,
+): string {
+  const date = new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  ).format(date);
+}
+
 
 function BetaNotice() {
   return (
