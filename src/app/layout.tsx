@@ -6,6 +6,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { MainMenu } from "@/components/navigation/MainMenu";
 import { TideHawkBrand } from "@/components/navigation/TideHawkBrand";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: {
@@ -29,6 +30,7 @@ export default function RootLayout({
           {children}
           <MainMenu />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
