@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "leaflet/dist/leaflet.css";
@@ -30,6 +31,7 @@ export default function RootLayout({
           {children}
           <MainMenu />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
