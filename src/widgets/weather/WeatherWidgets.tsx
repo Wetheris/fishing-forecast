@@ -33,6 +33,11 @@ import {
   stringSetting,
 } from "@/lib/widget-settings";
 import type { ForecastMetric } from "@/types/forecast";
+import type {
+  AstronomySourceData,
+  TideSourceData,
+  TideEvent,
+} from "@/types/source-data";
 import type { WeatherSourceData } from "@/types/weather";
 
 type ForecastSummaryMetric =
@@ -42,7 +47,11 @@ type ForecastSummaryMetric =
   | "evening-rain"
   | "wind"
   | "max-gust"
-  | "high-low";
+  | "high-low"
+  | "high-tide-am-pm"
+  | "low-tide-am-pm"
+  | "sunrise-sunset"
+  | "moon-illumination";
 
 const FORECAST_SUMMARY_OPTIONS: Array<{
   value: ForecastSummaryMetric;
@@ -76,12 +85,30 @@ const FORECAST_SUMMARY_OPTIONS: Array<{
     value: "high-low",
     label: "High / low",
   },
+  {
+    value: "high-tide-am-pm",
+    label: "High tide AM / PM",
+  },
+  {
+    value: "low-tide-am-pm",
+    label: "Low tide AM / PM",
+  },
+  {
+    value: "sunrise-sunset",
+    label: "Sunrise / sunset",
+  },
+  {
+    value: "moon-illumination",
+    label: "Moon %",
+  },
 ];
 
 
 export function ForecastOverviewWidget({
   widget,
   weatherState,
+  tideState,
+  astronomyState,
   forecastContext,
   onForecastDateChange,
   onWidgetSettingsChange,
@@ -122,12 +149,12 @@ export function ForecastOverviewWidget({
     forecastSummaryMetricSetting(
       widget.settings,
       "summaryMetric5",
-      "morning-rain",
+      "high-tide-am-pm",
     ),
     forecastSummaryMetricSetting(
       widget.settings,
       "summaryMetric6",
-      "evening-rain",
+      "sunrise-sunset",
     ),
   ];
 
@@ -194,6 +221,17 @@ export function ForecastOverviewWidget({
                 ),
               )} mph`;
 
+        const tideData =
+          tideState?.status === "success"
+            ? tideState.data
+            : null;
+        const astronomyData =
+          astronomyState?.status === "success" &&
+          astronomyState.data.date ===
+            forecastContext.selectedDate
+            ? astronomyState.data
+            : null;
+
         const summaryItems =
           summaryMetrics.map((metric) =>
             getForecastSummaryItem({
@@ -204,6 +242,10 @@ export function ForecastOverviewWidget({
               symbol,
               windRange,
               maximumGust,
+              selectedDate:
+                forecastContext.selectedDate,
+              tideData,
+              astronomyData,
             }),
           );
 
@@ -1263,6 +1305,9 @@ function getForecastSummaryItem({
   symbol,
   windRange,
   maximumGust,
+  selectedDate,
+  tideData,
+  astronomyData,
 }: {
   metric: ForecastSummaryMetric;
   summary: ReturnType<
@@ -1273,6 +1318,9 @@ function getForecastSummaryItem({
   symbol: string;
   windRange: string;
   maximumGust: string;
+  selectedDate: string;
+  tideData: TideSourceData | null;
+  astronomyData: AstronomySourceData | null;
 }): {
   label: string;
   value: string;
@@ -1323,6 +1371,46 @@ function getForecastSummaryItem({
         value: `${high}° / ${low}°${symbol}`,
       };
 
+    case "high-tide-am-pm":
+      return {
+        label: "High tide AM / PM",
+        value: formatTideAmPm(
+          tideData,
+          selectedDate,
+          "high",
+        ),
+      };
+
+    case "low-tide-am-pm":
+      return {
+        label: "Low tide AM / PM",
+        value: formatTideAmPm(
+          tideData,
+          selectedDate,
+          "low",
+        ),
+      };
+
+    case "sunrise-sunset":
+      return {
+        label: "Sunrise / sunset",
+        value: astronomyData
+          ? `${astronomyData.sunrise?.displayTime ?? "—"} · ${
+              astronomyData.sunset?.displayTime ?? "—"
+            }`
+          : "Unavailable",
+      };
+
+    case "moon-illumination":
+      return {
+        label: "Moon illumination",
+        value: astronomyData
+          ? `${roundMeasurement(
+              astronomyData.illuminationPercent,
+            )}%`
+          : "Unavailable",
+      };
+
     case "rain-am-pm":
     default:
       return {
@@ -1334,6 +1422,57 @@ function getForecastSummaryItem({
         )}`,
       };
   }
+}
+
+function formatTideAmPm(
+  data: TideSourceData | null,
+  selectedDate: string,
+  type: TideEvent["type"],
+): string {
+  if (!data) {
+    return "Unavailable";
+  }
+
+  const matching = data.events.filter(
+    (event) =>
+      event.type === type &&
+      event.localTime.startsWith(
+        `${selectedDate} `,
+      ),
+  );
+  const am = matching.find(
+    (event) => tideEventHour(event) < 12,
+  );
+  const pm = matching.find(
+    (event) => tideEventHour(event) >= 12,
+  );
+
+  if (!am && !pm) {
+    return "Unavailable";
+  }
+
+  return `AM ${formatTideClock(am)} · PM ${formatTideClock(pm)}`;
+}
+
+function tideEventHour(event: TideEvent): number {
+  const match = event.localTime.match(
+    /\s(\d{2}):\d{2}$/,
+  );
+
+  return match ? Number(match[1]) : -1;
+}
+
+function formatTideClock(
+  event: TideEvent | undefined,
+): string {
+  if (!event) {
+    return "—";
+  }
+
+  return event.displayTime.replace(
+    /\s(?:AM|PM)$/i,
+    "",
+  );
 }
 
 function temperatureValue(

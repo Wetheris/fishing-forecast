@@ -297,6 +297,37 @@ export function DashboardCanvas({
           const radarState =
             radarStates[source.id];
 
+          /*
+           * Forecast Overview is intentionally a multi-source
+           * summary. Its primary source remains weather, but it
+           * can also surface configured tide and astronomy data.
+           */
+          const overviewTideSource =
+            widget.widgetKey === "forecast-overview"
+              ? sources.find(
+                  (item) =>
+                    item.kind === "tide-station",
+                )
+              : undefined;
+          const overviewAstronomySource =
+            widget.widgetKey === "forecast-overview"
+              ? sources.find(
+                  (item) =>
+                    item.kind ===
+                    "astronomy-location",
+                )
+              : undefined;
+          const effectiveTideState =
+            overviewTideSource
+              ? tideStates[overviewTideSource.id]
+              : tideState;
+          const effectiveAstronomyState =
+            overviewAstronomySource
+              ? astronomyStates[
+                  overviewAstronomySource.id
+                ]
+              : astronomyState;
+
           return (
             <div key={placement.widgetId}>
               <WidgetShell
@@ -304,9 +335,10 @@ export function DashboardCanvas({
                 source={source}
                 updatedAt={getUpdatedAt({
                   weatherState,
-                  tideState,
+                  tideState: effectiveTideState,
                   marineState,
-                  astronomyState,
+                  astronomyState:
+                    effectiveAstronomyState,
                   radarState,
                 })}
                 mode={mode}
@@ -322,9 +354,11 @@ export function DashboardCanvas({
                   widget={widget}
                   source={source}
                   weatherState={weatherState}
-                  tideState={tideState}
+                  tideState={effectiveTideState}
                   marineState={marineState}
-                  astronomyState={astronomyState}
+                  astronomyState={
+                    effectiveAstronomyState
+                  }
                   radarState={radarState}
                   forecastContext={forecastContext}
                   onForecastDateChange={
