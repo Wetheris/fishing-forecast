@@ -289,7 +289,10 @@ async function fetchWaterMask(
       elevation?: unknown;
     };
 
-  if (!Array.isArray(payload.elevation)) {
+  const elevations =
+    payload.elevation;
+
+  if (!Array.isArray(elevations)) {
     throw new Error(
       "Open-Meteo elevation did not return a usable land mask.",
     );
@@ -303,7 +306,7 @@ async function fetchWaterMask(
    */
   return requestedPoints.map((_, index) => {
     const elevation =
-      payload.elevation?.[index];
+      elevations[index];
 
     return (
       typeof elevation === "number" &&
