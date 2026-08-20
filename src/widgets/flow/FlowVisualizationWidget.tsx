@@ -141,6 +141,10 @@ export function FlowVisualizationWidget({
   const editable =
     typeof onWidgetSettingsChange ===
     "function";
+  const showHeader =
+    widget.settings.showHeader !== false;
+  const compactShell =
+    widget.settings.density === "compact";
 
   /*
    * Tighten the visualization sampling grid as the user zooms in.
@@ -272,7 +276,16 @@ export function FlowVisualizationWidget({
   }
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-slate-200">
+    <div
+      className={[
+        "absolute inset-x-0 bottom-0 overflow-hidden bg-slate-200",
+        showHeader
+          ? compactShell
+            ? "top-9"
+            : "top-14"
+          : "top-0",
+      ].join(" ")}
+    >
       <FlowMap
         spotLatitude={latitude}
         spotLongitude={longitude}
@@ -351,11 +364,11 @@ export function FlowVisualizationWidget({
             : speedLabel}
       </div>
 
-      <div className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow">
-        {mode === "wind"
-          ? "Arrows show movement"
-          : "Modeled current · not for navigation"}
-      </div>
+      {mode === "wind" ? (
+        <div className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow">
+          Arrows show movement
+        </div>
+      ) : null}
 
       {flowState.status === "error" ? (
         <div className="pointer-events-none absolute inset-x-3 top-1/2 z-20 -translate-y-1/2 rounded-xl bg-white/95 p-3 text-center text-xs text-red-700 shadow">
@@ -1504,7 +1517,7 @@ function getAdaptiveRadiusMiles(
   mode: FlowMode,
 ): number {
   const scaled =
-    maximumRadiusMiles /
+    (maximumRadiusMiles * 1.6) /
     2 **
       Math.max(
         0,
