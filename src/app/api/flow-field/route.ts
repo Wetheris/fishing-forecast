@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     parseNumber(
       request.nextUrl.searchParams.get("radiusMiles"),
     ) ?? 20,
-    5,
+    1.5,
     60,
   );
   const density = normalizeDensity(
