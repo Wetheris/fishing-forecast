@@ -1,0 +1,203 @@
+diff --git a/src/components/dashboard/DashboardBuilder.tsx b/src/components/dashboard/DashboardBuilder.tsx
+--- a/src/components/dashboard/DashboardBuilder.tsx
++++ b/src/components/dashboard/DashboardBuilder.tsx
+@@
+   function updateWeatherLocation(
+     location: WeatherLocationSelection,
+   ) {
+     setSelectedForecastDateOverride(
+       undefined,
+     );
+     setDashboard((current) => ({
+       ...current,
+       sources:
+         current.sources.map(
+-          (source) =>
+-            source.kind ===
+-            "weather-location"
+-              ? {
+-                  ...source,
+-                  label:
+-                    location.label,
+-                  latitude:
+-                    location.latitude,
+-                  longitude:
+-                    location.longitude,
+-                  timezone:
+-                    location.timezone,
+-                }
+-              : source,
++          (source) => {
++            if (
++              source.kind ===
++              "weather-location"
++            ) {
++              return {
++                ...source,
++                label:
++                  location.label,
++                latitude:
++                  location.latitude,
++                longitude:
++                  location.longitude,
++                timezone:
++                  location.timezone,
++              };
++            }
++
++            if (
++              source.kind ===
++                "marine-location" &&
++              source.settings
++                .followWeatherLocation ===
++                true
++            ) {
++              return {
++                ...source,
++                label: `${location.label} Marine`,
++                latitude:
++                  location.latitude,
++                longitude:
++                  location.longitude,
++                timezone:
++                  location.timezone,
++              };
++            }
++
++            return source;
++          },
+         ),
+     }));
+   }
++
++  function updateMarineLocation(
++    sourceId: string,
++    location: WeatherLocationSelection,
++    options?: {
++      followWeather?: boolean;
++    },
++  ) {
++    setDashboard((current) => ({
++      ...current,
++      sources:
++        current.sources.map(
++          (source) =>
++            source.id === sourceId &&
++            source.kind ===
++              "marine-location"
++              ? {
++                  ...source,
++                  label:
++                    location.label,
++                  latitude:
++                    location.latitude,
++                  longitude:
++                    location.longitude,
++                  timezone:
++                    location.timezone,
++                  settings: {
++                    ...source.settings,
++                    followWeatherLocation:
++                      options?.followWeather ??
++                      false,
++                  },
++                }
++              : source,
++        ),
++    }));
++  }
+@@
+                 onWeatherLocationChange={updateWeatherLocation}
++                onMarineLocationChange={updateMarineLocation}
+                 onAddTideSource={addTideSource}
+                 onRemoveSource={removeSource}
+diff --git a/src/components/builder/BuilderToolbar.tsx b/src/components/builder/BuilderToolbar.tsx
+--- a/src/components/builder/BuilderToolbar.tsx
++++ b/src/components/builder/BuilderToolbar.tsx
+@@
+   onAddWidget,
+   onWeatherLocationChange,
++  onMarineLocationChange,
+   onAddTideSource,
+   onRemoveSource,
+@@
+   onWeatherLocationChange: (
+     location: WeatherLocationSelection,
+   ) => void;
++  onMarineLocationChange: (
++    sourceId: string,
++    location: WeatherLocationSelection,
++    options?: {
++      followWeather?: boolean;
++    },
++  ) => void;
+   onAddTideSource: (station: TideStationOption) => void;
+@@
+             onWeatherLocationChange={
+               onWeatherLocationChange
+             }
++            onMarineLocationChange={
++              onMarineLocationChange
++            }
+             onAddTideSource={onAddTideSource}
+diff --git a/src/components/builder/SourcesPanel.tsx b/src/components/builder/SourcesPanel.tsx
+--- a/src/components/builder/SourcesPanel.tsx
++++ b/src/components/builder/SourcesPanel.tsx
+@@
+ import { TideStationEditor } from "@/components/sources/TideStationEditor";
+ import { WeatherSourceEditor } from "@/components/sources/WeatherSourceEditor";
++import { MarineSourceEditor } from "@/components/sources/MarineSourceEditor";
+@@
+   radarStates,
+   onWeatherLocationChange,
++  onMarineLocationChange,
+   onAddTideSource,
+   onRemoveSource,
+@@
+   onWeatherLocationChange: (
+     location: WeatherLocationSelection,
+   ) => void;
++  onMarineLocationChange: (
++    sourceId: string,
++    location: WeatherLocationSelection,
++    options?: {
++      followWeather?: boolean;
++    },
++  ) => void;
+   onAddTideSource: (
+@@
+         >
+-          <SourceList
++          <MarineSourceEditor
+             sources={marineSources}
+-            emptyMessage="No marine source is configured."
+-            getStatus={(source) =>
+-              marineStates[source.id]?.status
+-            }
++            weatherSource={weatherSource}
++            marineStates={marineStates}
++            onLocationChange={
++              onMarineLocationChange
++            }
+           />
+         </SourceGroup>
+diff --git a/src/lib/mock-data.ts b/src/lib/mock-data.ts
+--- a/src/lib/mock-data.ts
++++ b/src/lib/mock-data.ts
+@@
+   {
+     id: "cape-may-marine",
+     kind: "marine-location",
+     providerKey: "open-meteo-marine",
+-    label: "Cape May Offshore",
+-    latitude: 38.91,
+-    longitude: -74.89,
++    label: "Cape May Point, NJ Marine",
++    latitude: 38.9376,
++    longitude: -74.9691,
+     timezone: "America/New_York",
+     settings: {
+-      gridDistanceMiles: 1.8,
++      followWeatherLocation: true,
+     },
+   },
