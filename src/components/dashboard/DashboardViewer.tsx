@@ -16,6 +16,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { DashboardStage } from "@/components/dashboard/DashboardStage";
 import { DashboardShareDialog } from "@/components/dashboard/DashboardShareDialog";
+import { FishingReportDialog } from "@/components/dashboard/FishingReportDialog";
 import { useWeatherSources } from "@/hooks/useWeatherSources";
 import {
   useAstronomySources,
@@ -50,56 +51,34 @@ type ViewerSource =
   | { kind: "shared"; token: string };
 
 export function DashboardViewer() {
-  const { user, loading: authLoading } =
-    useAuth();
-  const [dashboard, setDashboard] =
-    useState<FishingDashboard>();
+  const { user, loading: authLoading } = useAuth();
+  const [dashboard, setDashboard] = useState<FishingDashboard>();
   const [viewerSource, setViewerSource] =
     useState<ViewerSource>({ kind: "local" });
-  const [status, setStatus] =
-    useState<ViewerStatus>("loading");
-  const [error, setError] =
-    useState<string>();
-  const [authOpen, setAuthOpen] =
-    useState(false);
-  const [preferMobile, setPreferMobile] =
-    useState(false);
-  const [actionsOpen, setActionsOpen] =
-    useState(false);
-  const [actionMessage, setActionMessage] =
-    useState<string>();
-  const [shareOpen, setShareOpen] =
-    useState(false);
-  const [shareUrl, setShareUrl] =
-    useState<string>();
-  const [sharePreparing, setSharePreparing] =
-    useState(false);
-  const [shareError, setShareError] =
-    useState<string>();
-  const [controlsHidden, setControlsHidden] =
-    useState(false);
-  const [deleting, setDeleting] =
-    useState(false);
+  const [status, setStatus] = useState<ViewerStatus>("loading");
+  const [error, setError] = useState<string>();
+  const [authOpen, setAuthOpen] = useState(false);
+  const [preferMobile, setPreferMobile] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string>();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string>();
+  const [sharePreparing, setSharePreparing] = useState(false);
+  const [shareError, setShareError] = useState<string>();
+  const [reportOpen, setReportOpen] = useState(false);
+  const [controlsHidden, setControlsHidden] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selectedForecastDateOverride, setSelectedForecastDateOverride] =
     useState<string>();
-  const loadAttemptRef =
-    useRef<string | undefined>(undefined);
+  const loadAttemptRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    const media = window.matchMedia(
-      "(max-width: 700px)",
-    );
-
-    const update = () => {
-      setPreferMobile(media.matches);
-    };
+    const media = window.matchMedia("(max-width: 700px)");
+    const update = () => setPreferMobile(media.matches);
 
     update();
     media.addEventListener("change", update);
-
-    return () => {
-      media.removeEventListener("change", update);
-    };
+    return () => media.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -115,13 +94,11 @@ export function DashboardViewer() {
         if (
           actionsOpen ||
           shareOpen ||
+          reportOpen ||
           nextY < 72
         ) {
           setControlsHidden(false);
-        } else if (
-          delta > 5 &&
-          nextY > 110
-        ) {
+        } else if (delta > 5 && nextY > 110) {
           setControlsHidden(true);
           setActionsOpen(false);
         } else if (delta < -5) {
@@ -132,25 +109,18 @@ export function DashboardViewer() {
       });
     }
 
-    window.addEventListener(
-      "scroll",
-      handleScroll,
-      { passive: true },
-    );
+    window.addEventListener("scroll", handleScroll, {
+      passive: true,
+    });
 
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener(
-        "scroll",
-        handleScroll,
-      );
+      window.removeEventListener("scroll", handleScroll);
     };
-  }, [actionsOpen, shareOpen]);
+  }, [actionsOpen, reportOpen, shareOpen]);
 
   useEffect(() => {
-    const params = new URLSearchParams(
-      window.location.search,
-    );
+    const params = new URLSearchParams(window.location.search);
     const shareToken = params.get("share");
     const cloudId = params.get("dashboard");
 
@@ -161,19 +131,14 @@ export function DashboardViewer() {
       }
 
       loadAttemptRef.current = key;
-      setViewerSource({
-        kind: "shared",
-        token: shareToken,
-      });
+      setViewerSource({ kind: "shared", token: shareToken });
       setStatus("loading");
       setError(undefined);
 
       void loadSharedDashboard(shareToken)
         .then(({ dashboard: saved }) => {
           setDashboard(saved);
-          setSelectedForecastDateOverride(
-            undefined,
-          );
+          setSelectedForecastDateOverride(undefined);
           setStatus("ready");
         })
         .catch((caught: unknown) => {
@@ -188,10 +153,7 @@ export function DashboardViewer() {
     }
 
     if (cloudId) {
-      setViewerSource({
-        kind: "cloud",
-        id: cloudId,
-      });
+      setViewerSource({ kind: "cloud", id: cloudId });
 
       if (authLoading) {
         return;
@@ -214,9 +176,7 @@ export function DashboardViewer() {
       void loadCloudDashboard(cloudId)
         .then((saved) => {
           setDashboard(saved);
-          setSelectedForecastDateOverride(
-            undefined,
-          );
+          setSelectedForecastDateOverride(undefined);
           setStatus("ready");
         })
         .catch((caught: unknown) => {
@@ -235,9 +195,7 @@ export function DashboardViewer() {
 
     if (!draft) {
       setStatus("error");
-      setError(
-        "There is no local dashboard draft to view yet.",
-      );
+      setError("There is no local dashboard draft to view yet.");
       return;
     }
 
@@ -245,16 +203,24 @@ export function DashboardViewer() {
     setStatus("ready");
   }, [authLoading, user]);
 
-  const sources =
-    dashboard?.sources ?? EMPTY_SOURCES;
+  const sources = dashboard?.sources ?? EMPTY_SOURCES;
   const weatherStates = useWeatherSources(sources);
   const tideStates = useTideSources(sources);
   const marineStates = useMarineSources(sources);
 
   const primaryWeatherSource = sources.find(
-    (source) =>
-      source.kind === "weather-location",
+    (source) => source.kind === "weather-location",
   );
+  const primaryTideSource = sources.find(
+    (source) => source.kind === "tide-station",
+  );
+  const primaryMarineSource = sources.find(
+    (source) => source.kind === "marine-location",
+  );
+  const primaryAstronomySource = sources.find(
+    (source) => source.kind === "astronomy-location",
+  );
+
   const primaryWeatherState = primaryWeatherSource
     ? weatherStates[primaryWeatherSource.id]
     : undefined;
@@ -262,26 +228,18 @@ export function DashboardViewer() {
     primaryWeatherState?.status === "success"
       ? primaryWeatherState.data
       : null;
-  const fallbackTimezone =
-    primaryWeatherSource?.timezone ?? "UTC";
+
+  const fallbackTimezone = primaryWeatherSource?.timezone ?? "UTC";
   const todayDate =
     primaryWeatherData?.current.time.slice(0, 10) ??
-    dateKeyInTimezone(
-      new Date(),
-      fallbackTimezone,
-    );
+    dateKeyInTimezone(new Date(), fallbackTimezone);
   const availableForecastDates =
-    primaryWeatherData &&
-    primaryWeatherData.daily.length > 0
-      ? primaryWeatherData.daily.map(
-          (day) => day.date,
-        )
+    primaryWeatherData && primaryWeatherData.daily.length > 0
+      ? primaryWeatherData.daily.map((day) => day.date)
       : [todayDate];
   const selectedForecastDate =
     selectedForecastDateOverride &&
-    availableForecastDates.includes(
-      selectedForecastDateOverride,
-    )
+    availableForecastDates.includes(selectedForecastDateOverride)
       ? selectedForecastDateOverride
       : todayDate;
   const forecastContext: ForecastContext = {
@@ -299,20 +257,39 @@ export function DashboardViewer() {
   );
   const radarStates = useRadarSources(sources);
 
+  const primaryTideState = primaryTideSource
+    ? tideStates[primaryTideSource.id]
+    : undefined;
+  const primaryMarineState = primaryMarineSource
+    ? marineStates[primaryMarineSource.id]
+    : undefined;
+  const primaryAstronomyState = primaryAstronomySource
+    ? astronomyStates[primaryAstronomySource.id]
+    : undefined;
+
+  const primaryTideData =
+    primaryTideState?.status === "success"
+      ? primaryTideState.data
+      : null;
+  const primaryMarineData =
+    primaryMarineState?.status === "success"
+      ? primaryMarineState.data
+      : null;
+  const primaryAstronomyData =
+    primaryAstronomyState?.status === "success"
+      ? primaryAstronomyState.data
+      : null;
+
   const automaticMobileLayout = useMemo(() => {
     if (
       !dashboard ||
-      dashboard.layouts.some(
-        (layout) => layout.device === "mobile",
-      )
+      dashboard.layouts.some((layout) => layout.device === "mobile")
     ) {
       return undefined;
     }
 
     return {
-      ...createMobileLayoutFromDesktop(
-        dashboard.widgets,
-      ),
+      ...createMobileLayoutFromDesktop(dashboard.widgets),
       id: "viewer-auto-mobile",
       name: "Mobile",
     };
@@ -324,35 +301,25 @@ export function DashboardViewer() {
     }
 
     return automaticMobileLayout
-      ? [
-          ...dashboard.layouts,
-          automaticMobileLayout,
-        ]
+      ? [...dashboard.layouts, automaticMobileLayout]
       : dashboard.layouts;
   }, [automaticMobileLayout, dashboard]);
 
   const activeLayout = dashboard
     ? preferMobile
-      ? viewerLayouts.find(
-          (layout) =>
-            layout.device === "mobile",
-        ) ?? viewerLayouts[0]
-      : viewerLayouts.find(
-          (layout) =>
-            layout.device === "desktop",
-        ) ?? viewerLayouts[0]
+      ? viewerLayouts.find((layout) => layout.device === "mobile") ??
+        viewerLayouts[0]
+      : viewerLayouts.find((layout) => layout.device === "desktop") ??
+        viewerLayouts[0]
     : undefined;
 
-  const shareConditionSummary =
-    buildConditionSummary({
-      weatherSource:
-        primaryWeatherSource,
-      weatherStates,
-      sources,
-      tideStates,
-      marineStates,
-    });
-
+  const shareConditionSummary = buildConditionSummary({
+    weatherSource: primaryWeatherSource,
+    weatherStates,
+    sources,
+    tideStates,
+    marineStates,
+  });
 
   function updateWidgetSettings(
     widgetId: string,
@@ -362,21 +329,26 @@ export function DashboardViewer() {
       current
         ? {
             ...current,
-            widgets: current.widgets.map(
-              (widget) =>
-                widget.id === widgetId
-                  ? {
-                      ...widget,
-                      settings: {
-                        ...widget.settings,
-                        ...settings,
-                      },
-                    }
-                  : widget,
+            widgets: current.widgets.map((widget) =>
+              widget.id === widgetId
+                ? {
+                    ...widget,
+                    settings: {
+                      ...widget.settings,
+                      ...settings,
+                    },
+                  }
+                : widget,
             ),
           }
         : current,
     );
+  }
+
+  function openFishingReport() {
+    setActionsOpen(false);
+    setControlsHidden(false);
+    setReportOpen(true);
   }
 
   async function openShareDialog() {
@@ -396,61 +368,39 @@ export function DashboardViewer() {
       if (viewerSource.kind === "shared") {
         token = viewerSource.token;
       } else if (viewerSource.kind === "cloud") {
-        const remembered =
-          loadRememberedShareToken(
-            `cloud:${viewerSource.id}`,
-          );
+        const remembered = loadRememberedShareToken(
+          `cloud:${viewerSource.id}`,
+        );
 
         if (remembered) {
-          const saved =
-            await saveSharedDashboard({
-              dashboard,
-              existingShareToken:
-                remembered,
-            });
+          const saved = await saveSharedDashboard({
+            dashboard,
+            existingShareToken: remembered,
+          });
           token = saved.shareToken;
         } else {
-          const saved =
-            await saveSharedDashboard({
-              dashboard,
-            });
+          const saved = await saveSharedDashboard({ dashboard });
           token = saved.shareToken;
-          rememberShareToken(
-            `cloud:${viewerSource.id}`,
-            token,
-          );
+          rememberShareToken(`cloud:${viewerSource.id}`, token);
         }
       } else {
-        const remembered =
-          loadRememberedShareToken(
-            "local",
-          );
+        const remembered = loadRememberedShareToken("local");
 
         if (remembered) {
-          const saved =
-            await saveSharedDashboard({
-              dashboard,
-              existingShareToken:
-                remembered,
-            });
+          const saved = await saveSharedDashboard({
+            dashboard,
+            existingShareToken: remembered,
+          });
           token = saved.shareToken;
         } else {
-          const saved =
-            await saveSharedDashboard({
-              dashboard,
-            });
+          const saved = await saveSharedDashboard({ dashboard });
           token = saved.shareToken;
-          rememberShareToken(
-            "local",
-            token,
-          );
+          rememberShareToken("local", token);
         }
       }
 
       setShareUrl(
-        `${window.location.origin}/view?share=${encodeURIComponent(
-          token,
-        )}`,
+        `${window.location.origin}/view?share=${encodeURIComponent(token)}`,
       );
     } catch (caught) {
       setShareUrl(undefined);
@@ -481,12 +431,8 @@ export function DashboardViewer() {
     setActionMessage(undefined);
 
     try {
-      await deleteCloudDashboard(
-        viewerSource.id,
-      );
-      window.location.assign(
-        "/dashboards",
-      );
+      await deleteCloudDashboard(viewerSource.id);
+      window.location.assign("/dashboards");
     } catch (caught) {
       setDeleting(false);
       setActionsOpen(false);
@@ -499,8 +445,7 @@ export function DashboardViewer() {
   }
 
   const editHref = getEditHref(viewerSource);
-  const sessionsHref =
-    getSessionsHref(primaryWeatherSource);
+  const sessionsHref = getSessionsHref(primaryWeatherSource);
 
   if (status === "loading") {
     return (
@@ -537,18 +482,11 @@ export function DashboardViewer() {
     );
   }
 
-  if (
-    status === "error" ||
-    !dashboard ||
-    !activeLayout
-  ) {
+  if (status === "error" || !dashboard || !activeLayout) {
     return (
       <ViewerMessage
         title="Dashboard unavailable"
-        message={
-          error ??
-          "This dashboard could not be loaded."
-        }
+        message={error ?? "This dashboard could not be loaded."}
         action={
           <Link
             href="/build"
@@ -563,18 +501,14 @@ export function DashboardViewer() {
 
   return (
     <main
-      data-dashboard-controls-hidden={
-        controlsHidden ? "true" : "false"
-      }
+      data-dashboard-controls-hidden={controlsHidden ? "true" : "false"}
       className="dashboard-theme min-h-screen text-[var(--foreground)]"
       data-theme={dashboard.theme}
       style={{
         backgroundColor:
           "var(--dashboard-background, var(--background))",
-        backgroundImage:
-          "var(--dashboard-pattern, none)",
-        backgroundSize:
-          "var(--dashboard-pattern-size, auto)",
+        backgroundImage: "var(--dashboard-pattern, none)",
+        backgroundSize: "var(--dashboard-pattern-size, auto)",
         backgroundPosition: "center",
       }}
     >
@@ -582,9 +516,7 @@ export function DashboardViewer() {
         <button
           type="button"
           aria-label="Close dashboard actions"
-          onClick={() =>
-            setActionsOpen(false)
-          }
+          onClick={() => setActionsOpen(false)}
           className="fixed inset-0 z-[870] bg-transparent"
         />
       ) : null}
@@ -611,11 +543,7 @@ export function DashboardViewer() {
             type="button"
             aria-label="Dashboard actions"
             aria-expanded={actionsOpen}
-            onClick={() =>
-              setActionsOpen(
-                (current) => !current,
-              )
-            }
+            onClick={() => setActionsOpen((current) => !current)}
             className="flex h-10 w-11 items-center justify-center rounded-r-xl text-xl font-semibold tracking-[0.08em] hover:bg-[var(--surface-muted)]"
           >
             •••
@@ -627,9 +555,14 @@ export function DashboardViewer() {
                 icon="↑"
                 label="Share dashboard"
                 detail="Preview the public link and share message"
-                onClick={() =>
-                  void openShareDialog()
-                }
+                onClick={() => void openShareDialog()}
+              />
+
+              <ActionButton
+                icon="▤"
+                label="Generate fishing report"
+                detail="Choose a date and optional hourly window"
+                onClick={openFishingReport}
               />
 
               <ActionLink
@@ -653,23 +586,16 @@ export function DashboardViewer() {
                 detail="Open your saved dashboards"
               />
 
-              {viewerSource.kind ===
-              "cloud" ? (
+              {viewerSource.kind === "cloud" ? (
                 <>
                   <div className="my-1 border-t border-[var(--border)]" />
                   <ActionButton
                     icon="⌫"
-                    label={
-                      deleting
-                        ? "Deleting…"
-                        : "Delete dashboard"
-                    }
+                    label={deleting ? "Deleting…" : "Delete dashboard"}
                     detail="Remove this saved dashboard"
                     danger
                     disabled={deleting}
-                    onClick={() =>
-                      void deleteCurrentDashboard()
-                    }
+                    onClick={() => void deleteCurrentDashboard()}
                   />
                 </>
               ) : null}
@@ -686,19 +612,28 @@ export function DashboardViewer() {
 
       <DashboardShareDialog
         open={shareOpen}
-        onClose={() =>
-          setShareOpen(false)
-        }
+        onClose={() => setShareOpen(false)}
         preparing={sharePreparing}
         error={shareError}
         shareUrl={shareUrl}
         dashboardName={dashboard.name}
-        locationLabel={
-          primaryWeatherSource?.label
-        }
-        conditionSummary={
-          shareConditionSummary
-        }
+        locationLabel={primaryWeatherSource?.label}
+        conditionSummary={shareConditionSummary}
+      />
+
+      <FishingReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        dashboardName={dashboard.name}
+        locationLabel={primaryWeatherSource?.label}
+        availableDates={availableForecastDates}
+        selectedDate={selectedForecastDate}
+        todayDate={todayDate}
+        onDateChange={setSelectedForecastDateOverride}
+        weatherData={primaryWeatherData}
+        tideData={primaryTideData}
+        marineData={primaryMarineData}
+        astronomyData={primaryAstronomyData}
       />
 
       <DashboardStage
@@ -711,12 +646,8 @@ export function DashboardViewer() {
         astronomyStates={astronomyStates}
         radarStates={radarStates}
         forecastContext={forecastContext}
-        onForecastDateChange={
-          setSelectedForecastDateOverride
-        }
-        onWidgetSettingsChange={
-          updateWidgetSettings
-        }
+        onForecastDateChange={setSelectedForecastDateOverride}
+        onWidgetSettingsChange={updateWidgetSettings}
         mode="view"
       />
     </main>
@@ -735,15 +666,9 @@ function ViewerMessage({
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--surface-muted)] p-5">
       <section className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-white p-6 text-center shadow-sm">
-        <h1 className="text-xl font-semibold">
-          {title}
-        </h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          {message}
-        </p>
-        {action ? (
-          <div className="mt-5">{action}</div>
-        ) : null}
+        <h1 className="text-xl font-semibold">{title}</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">{message}</p>
+        {action ? <div className="mt-5">{action}</div> : null}
       </section>
     </main>
   );
@@ -769,12 +694,8 @@ function ActionLink({
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium">
-          {label}
-        </span>
-        <span className="block text-xs text-[var(--muted)]">
-          {detail}
-        </span>
+        <span className="block text-sm font-medium">{label}</span>
+        <span className="block text-xs text-[var(--muted)]">{detail}</span>
       </span>
     </Link>
   );
@@ -811,15 +732,11 @@ function ActionButton({
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium">
-          {label}
-        </span>
+        <span className="block text-sm font-medium">{label}</span>
         <span
           className={[
             "block text-xs",
-            danger
-              ? "text-red-500"
-              : "text-[var(--muted)]",
+            danger ? "text-red-500" : "text-[var(--muted)]",
           ].join(" ")}
         >
           {detail}
@@ -847,27 +764,19 @@ function EditIcon() {
   );
 }
 
-function getEditHref(
-  source: ViewerSource,
-): string {
+function getEditHref(source: ViewerSource): string {
   if (source.kind === "cloud") {
-    return `/build?dashboard=${encodeURIComponent(
-      source.id,
-    )}`;
+    return `/build?dashboard=${encodeURIComponent(source.id)}`;
   }
 
   if (source.kind === "shared") {
-    return `/build?share=${encodeURIComponent(
-      source.token,
-    )}`;
+    return `/build?share=${encodeURIComponent(source.token)}`;
   }
 
   return "/build";
 }
 
-function getSessionsHref(
-  source?: DashboardSource,
-): string {
+function getSessionsHref(source?: DashboardSource): string {
   if (
     !source ||
     typeof source.latitude !== "number" ||
@@ -880,21 +789,13 @@ function getSessionsHref(
     source.latitude,
   )}&longitude=${encodeURIComponent(
     source.longitude,
-  )}&label=${encodeURIComponent(
-    source.label,
-  )}`;
+  )}&label=${encodeURIComponent(source.label)}`;
 }
 
-const VIEWER_SHARE_KEY_PREFIX =
-  "fishing-forecast:viewer-share:";
+const VIEWER_SHARE_KEY_PREFIX = "fishing-forecast:viewer-share:";
 
-function rememberShareToken(
-  key: string,
-  shareToken: string,
-) {
-  if (
-    typeof window === "undefined"
-  ) {
+function rememberShareToken(key: string, shareToken: string) {
+  if (typeof window === "undefined") {
     return;
   }
 
@@ -903,37 +804,23 @@ function rememberShareToken(
     shareToken,
   );
 
-  /*
-   * The builder already uses this key for account
-   * dashboards. Mirror it so sharing from either
-   * screen reuses the same public URL.
-   */
   if (key.startsWith("cloud:")) {
     window.localStorage.setItem(
-      `fishing-forecast:cloud-share:${key.slice(
-        "cloud:".length,
-      )}`,
+      `fishing-forecast:cloud-share:${key.slice("cloud:".length)}`,
       shareToken,
     );
   }
 }
 
-function loadRememberedShareToken(
-  key: string,
-): string | undefined {
-  if (
-    typeof window === "undefined"
-  ) {
+function loadRememberedShareToken(key: string): string | undefined {
+  if (typeof window === "undefined") {
     return undefined;
   }
 
   if (key.startsWith("cloud:")) {
-    const builderToken =
-      window.localStorage.getItem(
-        `fishing-forecast:cloud-share:${key.slice(
-          "cloud:".length,
-        )}`,
-      );
+    const builderToken = window.localStorage.getItem(
+      `fishing-forecast:cloud-share:${key.slice("cloud:".length)}`,
+    );
 
     if (builderToken) {
       return builderToken;
@@ -941,9 +828,8 @@ function loadRememberedShareToken(
   }
 
   return (
-    window.localStorage.getItem(
-      `${VIEWER_SHARE_KEY_PREFIX}${key}`,
-    ) ?? undefined
+    window.localStorage.getItem(`${VIEWER_SHARE_KEY_PREFIX}${key}`) ??
+    undefined
   );
 }
 
@@ -955,138 +841,88 @@ function buildConditionSummary({
   marineStates,
 }: {
   weatherSource?: DashboardSource;
-  weatherStates: ReturnType<
-    typeof useWeatherSources
-  >;
+  weatherStates: ReturnType<typeof useWeatherSources>;
   sources: DashboardSource[];
-  tideStates: ReturnType<
-    typeof useTideSources
-  >;
-  marineStates: ReturnType<
-    typeof useMarineSources
-  >;
+  tideStates: ReturnType<typeof useTideSources>;
+  marineStates: ReturnType<typeof useMarineSources>;
 }): string | undefined {
   const parts: string[] = [];
 
   if (weatherSource) {
-    const state =
-      weatherStates[
-        weatherSource.id
-      ];
+    const state = weatherStates[weatherSource.id];
 
     if (state?.status === "success") {
-      const current =
-        state.data.current;
-      const temperature =
-        Math.round(
-          celsiusToFahrenheit(
-            current.temperatureC,
-          ),
-        );
-      const wind =
-        Math.round(
-          metersPerSecondToMph(
-            current.windSpeedMps,
-          ),
-        );
+      const current = state.data.current;
+      const temperature = Math.round(
+        celsiusToFahrenheit(current.temperatureC),
+      );
+      const wind = Math.round(
+        metersPerSecondToMph(current.windSpeedMps),
+      );
 
-      parts.push(
-        `${temperature}°F ${current.condition}`,
-      );
-      parts.push(
-        `Wind ${current.windDirectionLabel} ${wind} mph`,
-      );
+      parts.push(`${temperature}°F ${current.condition}`);
+      parts.push(`Wind ${current.windDirectionLabel} ${wind} mph`);
     }
   }
 
   const tideSource = sources.find(
-    (source) =>
-      source.kind === "tide-station",
+    (source) => source.kind === "tide-station",
   );
   const tideState = tideSource
     ? tideStates[tideSource.id]
     : undefined;
 
-  if (
-    tideState?.status === "success"
-  ) {
+  if (tideState?.status === "success") {
     const tide = tideState.data;
     const height =
       tide.currentHeightFt === null
         ? ""
-        : ` ${tide.currentHeightFt.toFixed(
-            1,
-          )} ft`;
+        : ` ${tide.currentHeightFt.toFixed(1)} ft`;
 
-    parts.push(
-      `${titleCase(
-        tide.currentTrend,
-      )} tide${height}`,
-    );
+    parts.push(`${titleCase(tide.currentTrend)} tide${height}`);
   }
 
   const marineSource = sources.find(
-    (source) =>
-      source.kind ===
-      "marine-location",
+    (source) => source.kind === "marine-location",
   );
   const marineState = marineSource
     ? marineStates[marineSource.id]
     : undefined;
 
   if (
-    marineState?.status ===
-      "success" &&
-    marineState.data.current
-      .seaSurfaceTemperatureC !== null
+    marineState?.status === "success" &&
+    marineState.data.current.seaSurfaceTemperatureC !== null
   ) {
     parts.push(
       `Water ${Math.round(
         celsiusToFahrenheit(
-          marineState.data.current
-            .seaSurfaceTemperatureC,
+          marineState.data.current.seaSurfaceTemperatureC,
         ),
       )}°F`,
     );
   }
 
-  return parts.length > 0
-    ? parts.join(" · ")
-    : undefined;
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-function titleCase(
-  value: string,
-): string {
+function titleCase(value: string): string {
   if (!value) {
     return value;
   }
 
-  return (
-    value[0].toUpperCase() +
-    value.slice(1)
-  );
+  return value[0].toUpperCase() + value.slice(1);
 }
 
-function dateKeyInTimezone(
-  date: Date,
-  timezone: string,
-): string {
+function dateKeyInTimezone(date: Date, timezone: string): string {
   try {
-    const parts = new Intl.DateTimeFormat(
-      "en-US",
-      {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      },
-    ).formatToParts(date);
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
     const values = Object.fromEntries(
-      parts.map((part) => [
-        part.type,
-        part.value,
-      ]),
+      parts.map((part) => [part.type, part.value]),
     );
 
     return `${values.year}-${values.month}-${values.day}`;
