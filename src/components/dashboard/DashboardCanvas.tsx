@@ -110,7 +110,7 @@ export function DashboardCanvas({
           widget?.widgetKey === "hourly-forecast" &&
           layout.device === "mobile" &&
           compact &&
-          placement.h === 3;
+          placement.h < 3;
 
         return {
           i: placement.widgetId,
@@ -118,7 +118,7 @@ export function DashboardCanvas({
           y: placement.y,
           w: placement.w,
           h: migrateCompactMobileHourlyHeight
-            ? 2
+            ? 3
             : placement.h,
           minW: minimums.minW,
           minH: minimums.minH,
@@ -310,7 +310,8 @@ export function DashboardCanvas({
                 )
               : undefined;
           const overviewAstronomySource =
-            widget.widgetKey === "forecast-overview"
+            widget.widgetKey === "forecast-overview" ||
+            widget.widgetKey === "hourly-forecast"
               ? sources.find(
                   (item) =>
                     item.kind ===
@@ -434,7 +435,7 @@ function getEffectiveMinimums(
     case "hourly-forecast":
       return {
         minW: mobile ? 2 : 3,
-        minH: mobile ? 2 : 3,
+        minH: 3,
       };
 
     case "wind-forecast":

@@ -255,9 +255,6 @@ export function ForecastOverviewWidget({
               <div className="min-w-[120px] flex-[1_1_160px]">
                 <ForecastDaySelector
                   daily={data.daily}
-                  selectedDate={
-                    forecastContext.selectedDate
-                  }
                   todayDate={
                     forecastContext.todayDate
                   }
@@ -608,6 +605,7 @@ export function RainChanceWidget({
 export function HourlyForecastWidget({
   widget,
   weatherState,
+  astronomyState,
   forecastContext,
 }: WidgetComponentProps) {
   const [metric, setMetric] =
@@ -707,7 +705,7 @@ export function HourlyForecastWidget({
                     setMetric("temperature")
                   }
                 >
-                  Temperature
+                  {compact ? "Temp" : "Temperature"}
                 </MetricTab>
                 <MetricTab
                   compact={compact}
@@ -716,7 +714,7 @@ export function HourlyForecastWidget({
                     setMetric("precipitation")
                   }
                 >
-                  Precipitation
+                  {compact ? "Rain" : "Precipitation"}
                 </MetricTab>
                 <MetricTab
                   compact={compact}
@@ -739,9 +737,13 @@ export function HourlyForecastWidget({
                     : "px-3 py-1.5 text-xs",
                 ].join(" ")}
               >
-                {expanded
-                  ? "8 points"
-                  : "Full day"}
+                {compact
+                  ? expanded
+                    ? "8 pts"
+                    : "All day"
+                  : expanded
+                    ? "8 points"
+                    : "Full day"}
               </button>
             </div>
 
@@ -754,10 +756,7 @@ export function HourlyForecastWidget({
                   showPointLabels={showPointLabels}
                   showRainChance={showRainChance}
                   points={selectedHours.map((hour) => ({
-                    label: formatHourLabel(
-                      hour.time,
-                      forecastContext.selectedDate,
-                    ),
+                    label: formatHourLabel(hour.time),
                     temperature:
                       unit === "celsius"
                         ? hour.temperatureC
@@ -775,6 +774,13 @@ export function HourlyForecastWidget({
                   unit={unit}
                   selectedDate={
                     forecastContext.selectedDate
+                  }
+                  astronomyData={
+                    astronomyState?.status === "success" &&
+                    astronomyState.data.date ===
+                      forecastContext.selectedDate
+                      ? astronomyState.data
+                      : null
                   }
                   compact={compact}
                 />
@@ -917,142 +923,334 @@ function HourlyForecastStrip({
   hours,
   metric,
   unit,
-  selectedDate,
+  astronomyData,
   compact,
 }: {
   hours: WeatherSourceData["hourly"];
   metric: ForecastMetric;
   unit: string;
-  selectedDate: string;
+  astronomyData: AstronomySourceData | null;
   compact: boolean;
 }) {
+  const solarMarkers = buildSolarMarkers(
+    hours,
+    astronomyData,
+  );
+
   return (
     <div
       className={[
         "grid h-full min-h-0 grid-flow-col overflow-x-auto",
-        compact ? "gap-1" : "gap-2 pb-1",
+        compact ? "gap-1.5" : "gap-2 pb-1",
       ].join(" ")}
       style={{
         gridAutoColumns: compact
-          ? "minmax(76px, 1fr)"
-          : "minmax(94px, 1fr)",
+          ? "minmax(92px, 1fr)"
+          : "minmax(108px, 1fr)",
       }}
     >
-      {hours.map((hour) => (
-        <div
-          key={`${metric}-${hour.time}`}
-          className={[
-            "flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl bg-[var(--surface-muted)] text-center",
-            compact ? "gap-0.5 px-1 py-1" : "p-3",
-          ].join(" ")}
-        >
-          {compact ? (
-            <p className="whitespace-nowrap text-[11px] font-semibold leading-none tracking-tight text-[var(--foreground)]">
-              {formatShortNumericDate(
-                dateKeyFromLocalTime(hour.time),
-              )}
-              <span className="px-1 text-[var(--muted)]">·</span>
+      {hours.map((hour) => {
+        const solarMarker =
+          solarMarkers.get(hour.time);
+
+        return (
+          <div
+            key={`${metric}-${hour.time}`}
+            className={[
+              "flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl bg-[var(--surface-muted)] text-center",
+              compact
+                ? "gap-1 px-1.5 py-1.5"
+                : "gap-1.5 px-2 py-2",
+            ].join(" ")}
+          >
+            <div
+              className={[
+                "flex w-full min-w-0 items-center justify-center",
+                compact ? "min-h-3.5" : "min-h-4",
+              ].join(" ")}
+            >
+              {solarMarker ? (
+                <SolarEventLabel
+                  marker={solarMarker}
+                  compact={compact}
+                />
+              ) : null}
+            </div>
+
+            <p
+              className={[
+                "max-w-full truncate font-semibold tracking-tight text-[var(--foreground)]",
+                compact
+                  ? "text-xs leading-none"
+                  : "text-sm leading-none",
+              ].join(" ")}
+            >
               {formatLocalHour(hour.time)}
             </p>
-          ) : (
-            <p className="truncate text-xs text-[var(--muted)]">
-              {formatHourLabel(
-                hour.time,
-                selectedDate,
-              )}
-            </p>
-          )}
 
-          {metric === "temperature" ? (
-            <>
-              <WeatherConditionIcon
-                weatherCode={hour.weatherCode}
-                condition={hour.condition}
-                size={compact ? 16 : 38}
-              />
-              <p
-                className={
-                  compact
-                    ? "truncate text-xs font-medium"
-                    : "font-medium"
-                }
-              >
-                {roundMeasurement(
-                  unit === "celsius"
-                    ? hour.temperatureC
-                    : celsiusToFahrenheit(
-                        hour.temperatureC,
-                      ),
-                )}
-                °{unit === "celsius" ? "C" : "F"}
-              </p>
-              {!compact ? (
-                <p className="mt-1 max-w-full truncate text-xs text-[var(--muted)]">
-                  {hour.condition}
+            {metric === "temperature" ? (
+              <>
+                <WeatherConditionIcon
+                  weatherCode={hour.weatherCode}
+                  condition={hour.condition}
+                  size={compact ? 20 : 34}
+                />
+                <p
+                  className={[
+                    "max-w-full truncate font-semibold",
+                    compact ? "text-xs" : "text-sm",
+                  ].join(" ")}
+                >
+                  {roundMeasurement(
+                    unit === "celsius"
+                      ? hour.temperatureC
+                      : celsiusToFahrenheit(
+                          hour.temperatureC,
+                        ),
+                  )}
+                  °{unit === "celsius" ? "C" : "F"}
                 </p>
-              ) : null}
-            </>
-          ) : null}
+                {!compact ? (
+                  <p className="max-w-full truncate text-[11px] leading-tight text-[var(--muted)]">
+                    {hour.condition}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
 
-          {metric === "precipitation" ? (
-            <>
-              <WeatherConditionIcon
-                weatherCode={hour.weatherCode}
-                condition={hour.condition}
-                size={compact ? 16 : 38}
-              />
-              <p
-                className={
-                  compact
-                    ? "truncate text-xs font-medium"
-                    : "font-medium"
-                }
-              >
-                {formatPercent(
-                  hour.rainChancePercent,
-                )}
-              </p>
-              {!compact ? (
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  chance of rain
+            {metric === "precipitation" ? (
+              <>
+                <WeatherConditionIcon
+                  weatherCode={hour.weatherCode}
+                  condition={hour.condition}
+                  size={compact ? 20 : 34}
+                />
+                <p
+                  className={[
+                    "max-w-full truncate font-semibold",
+                    compact ? "text-xs" : "text-sm",
+                  ].join(" ")}
+                >
+                  {formatPercent(
+                    hour.rainChancePercent,
+                  )}
                 </p>
-              ) : null}
-            </>
-          ) : null}
+                {!compact ? (
+                  <p className="max-w-full truncate text-[11px] leading-tight text-[var(--muted)]">
+                    Rain chance
+                  </p>
+                ) : null}
+              </>
+            ) : null}
 
-          {metric === "wind" ? (
-            <>
-              <WindDirectionArrow
-                fromDegrees={
-                  hour.windDirectionDegrees
-                }
-                size={compact ? 18 : 38}
-              />
-              <p
-                className={
-                  compact
-                    ? "truncate text-[10px] font-medium"
-                    : "font-medium"
-                }
-              >
-                {formatMph(hour.windSpeedMps)}
-              </p>
-              {!compact ? (
-                <>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    From {hour.windDirectionLabel}
-                  </p>
-                  <p className="text-xs text-[var(--muted)]">
-                    Gust {formatMph(hour.windGustMps)}
-                  </p>
-                </>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-      ))}
+            {metric === "wind" ? (
+              <>
+                <WindDirectionArrow
+                  fromDegrees={
+                    hour.windDirectionDegrees
+                  }
+                  size={compact ? 20 : 34}
+                />
+                <p
+                  className={[
+                    "max-w-full truncate font-semibold",
+                    compact
+                      ? "text-[11px]"
+                      : "text-sm",
+                  ].join(" ")}
+                >
+                  {formatMph(hour.windSpeedMps)}
+                </p>
+                {!compact ? (
+                  <>
+                    <p className="max-w-full truncate text-[11px] leading-tight text-[var(--muted)]">
+                      From {hour.windDirectionLabel}
+                    </p>
+                    <p className="max-w-full truncate text-[11px] leading-tight text-[var(--muted)]">
+                      Gust {formatMph(hour.windGustMps)}
+                    </p>
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+type SolarMarker = {
+  kind: "sunrise" | "sunset";
+  label: "Sunrise" | "Sunset";
+  displayTime: string;
+};
+
+function buildSolarMarkers(
+  hours: WeatherSourceData["hourly"],
+  astronomyData: AstronomySourceData | null,
+): Map<string, SolarMarker> {
+  const markers = new Map<string, SolarMarker>();
+
+  if (!astronomyData) {
+    return markers;
+  }
+
+  const events: Array<{
+    kind: SolarMarker["kind"];
+    label: SolarMarker["label"];
+    displayTime: string | null;
+  }> = [
+    {
+      kind: "sunrise",
+      label: "Sunrise",
+      displayTime:
+        astronomyData.sunrise?.displayTime ?? null,
+    },
+    {
+      kind: "sunset",
+      label: "Sunset",
+      displayTime:
+        astronomyData.sunset?.displayTime ?? null,
+    },
+  ];
+
+  for (const event of events) {
+    if (!event.displayTime) {
+      continue;
+    }
+
+    const eventMinutes =
+      parseDisplayClockMinutes(event.displayTime);
+
+    if (eventMinutes === null) {
+      continue;
+    }
+
+    let closestHour: WeatherSourceData["hourly"][number] | null = null;
+    let closestDifference = Number.POSITIVE_INFINITY;
+
+    for (const hour of hours) {
+      if (
+        dateKeyFromLocalTime(hour.time) !==
+        astronomyData.date
+      ) {
+        continue;
+      }
+
+      const hourMinutes =
+        parseLocalHourMinutes(hour.time);
+      const difference = Math.abs(
+        hourMinutes - eventMinutes,
+      );
+
+      if (difference < closestDifference) {
+        closestHour = hour;
+        closestDifference = difference;
+      }
+    }
+
+    // An orientation label only belongs on a nearby hourly point.
+    if (closestHour && closestDifference <= 120) {
+      markers.set(closestHour.time, {
+        kind: event.kind,
+        label: event.label,
+        displayTime: event.displayTime,
+      });
+    }
+  }
+
+  return markers;
+}
+
+function SolarEventLabel({
+  marker,
+  compact,
+}: {
+  marker: SolarMarker;
+  compact: boolean;
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex max-w-full items-center justify-center gap-0.5 truncate font-medium text-[var(--accent)]",
+        compact
+          ? "text-[9px] leading-none"
+          : "text-[10px] leading-none",
+      ].join(" ")}
+      title={`${marker.label} ${marker.displayTime}`}
+    >
+      <SolarEventIcon kind={marker.kind} />
+      <span className="truncate">
+        {marker.label} {marker.displayTime}
+      </span>
+    </span>
+  );
+}
+
+function SolarEventIcon({
+  kind,
+}: {
+  kind: SolarMarker["kind"];
+}) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3 w-3 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 11h12" />
+      <path d="M4.5 9a3.5 3.5 0 0 1 7 0" />
+      <path d="M8 2.5v2" />
+      <path d="m4.8 4.2 1.1 1.1" />
+      <path d="m11.2 4.2-1.1 1.1" />
+      {kind === "sunrise" ? (
+        <path d="m6.5 14 1.5-1.5L9.5 14" />
+      ) : (
+        <path d="m6.5 12.5 1.5 1.5 1.5-1.5" />
+      )}
+    </svg>
+  );
+}
+
+function parseDisplayClockMinutes(
+  displayTime: string,
+): number | null {
+  const match = displayTime.match(
+    /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  let hour = Number(match[1]) % 12;
+  const minute = Number(match[2]);
+
+  if (match[3].toUpperCase() === "PM") {
+    hour += 12;
+  }
+
+  return hour * 60 + minute;
+}
+
+function parseLocalHourMinutes(
+  localDateTime: string,
+): number {
+  const match = localDateTime.match(
+    /T(\d{2}):(\d{2})/,
+  );
+
+  if (!match) {
+    return 0;
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function MetricTab({
@@ -1488,20 +1686,8 @@ function temperatureValue(
 
 function formatHourLabel(
   localDateTime: string,
-  selectedDate: string,
 ): string {
-  const date =
-    dateKeyFromLocalTime(localDateTime);
-  const time =
-    formatLocalHour(localDateTime);
-
-  if (date === selectedDate) {
-    return time;
-  }
-
-  return `${formatShortNumericDate(
-    date,
-  )} ${time}`;
+  return formatLocalHour(localDateTime);
 }
 
 function formatPercent(
