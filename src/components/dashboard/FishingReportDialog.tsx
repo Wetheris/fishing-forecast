@@ -36,6 +36,19 @@ type TimeFrame =
   | "evening"
   | "custom";
 
+type ReportItem = {
+  metric: ReportMetric;
+  label: string;
+  value: string;
+};
+
+type GeneratedReport = {
+  imageUrl: string;
+  imageBlob: Blob;
+  text: string;
+  filename: string;
+};
+
 const DEFAULT_METRICS: ReportMetric[] = [
   "rain-am-pm",
   "wind",
@@ -110,6 +123,10 @@ export function FishingReportDialog({
     useState<TimeFrame>("all");
   const [customStart, setCustomStart] = useState(6);
   const [customEnd, setCustomEnd] = useState(18);
+  const [generated, setGenerated] =
+    useState<GeneratedReport | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [message, setMessage] = useState<string>();
 
   useEffect(() => {
     if (!open) {
@@ -131,6 +148,14 @@ export function FishingReportDialog({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, open]);
+
+  useEffect(() => {
+    return () => {
+      if (generated?.imageUrl) {
+        URL.revokeObjectURL(generated.imageUrl);
+      }
+    };
+  }, [generated]);
 
   const daySummary = useMemo(
     () =>
@@ -169,12 +194,177 @@ export function FishingReportDialog({
     });
   }, [hourlyWindow, selectedDate, weatherData]);
 
+  const reportItems = useMemo<ReportItem[]>(
+    () =>
+      metrics.map((metric) => ({
+        metric,
+        label: reportMetricLabel(metric),
+        value: getReportMetric({
+          metric,
+          selectedDate,
+          daySummary,
+          tideData,
+          marineData,
+          astronomyData: dateAstronomy,
+        }),
+      })),
+    [
+      dateAstronomy,
+      daySummary,
+      marineData,
+      metrics,
+      selectedDate,
+      tideData,
+    ],
+  );
+
+  useEffect(() => {
+    setGenerated(null);
+    setMessage(undefined);
+  }, [
+    selectedDate,
+    metrics,
+    timeFrame,
+    customStart,
+    customEnd,
+    weatherData,
+    tideData,
+    marineData,
+    dateAstronomy,
+  ]);
+
   if (!open) {
     return null;
   }
 
   const selectedDay = daySummary?.daily ?? null;
   const condition = selectedDay?.condition ?? "Forecast unavailable";
+  const reportLocation = locationLabel ?? dashboardName;
+  const timeFrameLabel = formatTimeFrameLabel(
+    timeFrame,
+    customStart,
+    customEnd,
+  );
+
+  async function generateReport() {
+    if (!selectedDay) {
+      setMessage("Weather data is not available for this date yet.");
+      return;
+    }
+
+    setGenerating(true);
+    setMessage(undefined);
+
+    try {
+      const text = buildPlainTextReport({
+        location: reportLocation,
+        selectedDate,
+        todayDate,
+        condition,
+        highF: roundMeasurement(
+          celsiusToFahrenheit(selectedDay.temperatureMaxC),
+        ),
+        lowF: roundMeasurement(
+          celsiusToFahrenheit(selectedDay.temperatureMinC),
+        ),
+        timeFrameLabel,
+        items: reportItems,
+        hourlyRows,
+        includeHourly: Boolean(hourlyWindow),
+      });
+
+      const imageBlob = await renderReportImage({
+        location: reportLocation,
+        selectedDate,
+        todayDate,
+        condition,
+        highF: roundMeasurement(
+          celsiusToFahrenheit(selectedDay.temperatureMaxC),
+        ),
+        lowF: roundMeasurement(
+          celsiusToFahrenheit(selectedDay.temperatureMinC),
+        ),
+        timeFrameLabel,
+        items: reportItems,
+        hourlyRows,
+        includeHourly: Boolean(hourlyWindow),
+      });
+
+      const filename = `tidehawk-fishing-report-${selectedDate}.png`;
+      const imageUrl = URL.createObjectURL(imageBlob);
+
+      setGenerated({
+        imageUrl,
+        imageBlob,
+        text,
+        filename,
+      });
+      setMessage("Report generated.");
+    } catch (caught) {
+      setMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to generate the report.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function copyTextReport() {
+    if (!generated) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(generated.text);
+      setMessage("Plain-text report copied.");
+    } catch {
+      setMessage("Copy failed. You can select the text manually below.");
+    }
+  }
+
+  async function shareGeneratedReport() {
+    if (!generated) {
+      return;
+    }
+
+    if (!navigator.share) {
+      setMessage("Native sharing is not available in this browser. Use Save image or Copy text instead.");
+      return;
+    }
+
+    const file = new File(
+      [generated.imageBlob],
+      generated.filename,
+      { type: "image/png" },
+    );
+
+    try {
+      if (
+        navigator.canShare?.({ files: [file] })
+      ) {
+        await navigator.share({
+          title: "TideHawk Fishing Report",
+          text: generated.text,
+          files: [file],
+        });
+      } else {
+        await navigator.share({
+          title: "TideHawk Fishing Report",
+          text: generated.text,
+        });
+      }
+    } catch (caught) {
+      if (
+        caught instanceof DOMException &&
+        caught.name === "AbortError"
+      ) {
+        return;
+      }
+      setMessage("Unable to open the share sheet.");
+    }
+  }
 
   return (
     <div
@@ -188,17 +378,22 @@ export function FishingReportDialog({
         }
       }}
     >
-      <section className="dashboard-theme flex max-h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-2xl sm:max-h-[90vh] sm:rounded-3xl">
+      <section className="dashboard-theme flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-t-3xl border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] shadow-2xl sm:max-h-[92vh] sm:rounded-3xl">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--border)] px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <ReportIcon />
-              <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
-                Fishing report
-              </h2>
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">
+                  Fishing report
+                </h2>
+                <p className="text-xs font-medium text-[var(--accent)]">
+                  Configure, then generate a shareable image + text report
+                </p>
+              </div>
             </div>
             <p className="mt-1 truncate text-sm text-[var(--muted)]">
-              {locationLabel ?? dashboardName}
+              {reportLocation}
             </p>
           </div>
 
@@ -299,43 +494,32 @@ export function FishingReportDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-px bg-[var(--border)] sm:grid-cols-3">
-              {metrics.map((metric, index) => {
-                const item = getReportMetric({
-                  metric,
-                  selectedDate,
-                  daySummary,
-                  tideData,
-                  marineData,
-                  astronomyData: dateAstronomy,
-                });
-
-                return (
-                  <div
-                    key={`${index}-${metric}`}
-                    className="min-w-0 bg-[var(--surface)] p-3 sm:p-4"
+              {reportItems.map((item, index) => (
+                <div
+                  key={`${index}-${item.metric}`}
+                  className="min-w-0 bg-[var(--surface)] p-3 sm:p-4"
+                >
+                  <select
+                    value={item.metric}
+                    aria-label={`Report metric ${index + 1}`}
+                    onChange={(event) => {
+                      const next = [...metrics];
+                      next[index] = event.target.value as ReportMetric;
+                      setMetrics(next);
+                    }}
+                    className="max-w-full cursor-pointer bg-transparent text-xs font-medium text-[var(--muted)] outline-none sm:text-sm"
                   >
-                    <select
-                      value={metric}
-                      aria-label={`Report metric ${index + 1}`}
-                      onChange={(event) => {
-                        const next = [...metrics];
-                        next[index] = event.target.value as ReportMetric;
-                        setMetrics(next);
-                      }}
-                      className="max-w-full cursor-pointer bg-transparent text-xs font-medium text-[var(--muted)] outline-none sm:text-sm"
-                    >
-                      {METRIC_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1.5 truncate text-base font-semibold sm:text-lg">
-                      {item}
-                    </p>
-                  </div>
-                );
-              })}
+                    {METRIC_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 truncate text-base font-semibold sm:text-lg">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
             </div>
           </section>
 
@@ -401,9 +585,94 @@ export function FishingReportDialog({
             </section>
           ) : (
             <p className="mt-4 text-xs text-[var(--muted)]">
-              Choose a morning, afternoon, evening, or custom time frame to add an hourly temperature, rain, and wind breakdown.
+              Choose a morning, afternoon, evening, or custom time frame to include hourly temperature, rain, wind, and gusts in the generated report.
             </p>
           )}
+
+          <div className="sticky bottom-0 z-10 -mx-4 mt-5 border-t border-[var(--border)] bg-[var(--surface)]/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
+            <button
+              type="button"
+              onClick={() => void generateReport()}
+              disabled={generating || !selectedDay}
+              className="w-full rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {generating
+                ? "Generating report…"
+                : "Generate report image + text"}
+            </button>
+            <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
+              Creates a mobile-format PNG and matching plain-text report in your browser.
+            </p>
+          </div>
+
+          {message ? (
+            <p className="mt-3 rounded-xl bg-[var(--surface-muted)] px-3 py-2 text-center text-xs text-[var(--muted)]">
+              {message}
+            </p>
+          ) : null}
+
+          {generated ? (
+            <section className="mt-5 space-y-4 border-t border-[var(--border)] pt-5">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">Shareable image</h3>
+                    <p className="text-xs text-[var(--muted)]">
+                      Portrait/mobile layout, ready for messages or social sharing.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={generated.imageUrl}
+                      download={generated.filename}
+                      className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)]"
+                    >
+                      Save image
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => void shareGeneratedReport()}
+                      className="rounded-xl bg-[var(--accent)] px-3 py-2 text-xs font-medium text-white"
+                    >
+                      Share report
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mx-auto mt-3 max-w-[390px] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] shadow-sm">
+                  <img
+                    src={generated.imageUrl}
+                    alt="Generated TideHawk fishing report preview"
+                    className="block h-auto w-full"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-base font-semibold">Plain-text report</h3>
+                    <p className="text-xs text-[var(--muted)]">
+                      Same data, formatted for text messages, posts, or notes.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void copyTextReport()}
+                    className="shrink-0 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-medium hover:bg-[var(--surface-muted)]"
+                  >
+                    Copy text
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  value={generated.text}
+                  rows={12}
+                  className="mt-3 w-full resize-y rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 font-mono text-xs leading-5 outline-none"
+                />
+              </div>
+            </section>
+          ) : null}
         </div>
       </section>
     </div>
@@ -437,15 +706,20 @@ function HourSelect({
           (option) =>
             option.value >= minimum &&
             option.value <= maximum,
-        ).map(
-          (option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ),
-        )}
+        ).map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
     </label>
+  );
+}
+
+function reportMetricLabel(metric: ReportMetric): string {
+  return (
+    METRIC_OPTIONS.find((option) => option.value === metric)?.label ??
+    metric
   );
 }
 
@@ -561,9 +835,11 @@ function marineHoursForDate(
   marineData: MarineSourceData | null,
   selectedDate: string,
 ) {
-  return marineData?.hourly.filter(
-    (hour) => hour.time.slice(0, 10) === selectedDate,
-  ) ?? [];
+  return (
+    marineData?.hourly.filter(
+      (hour) => hour.time.slice(0, 10) === selectedDate,
+    ) ?? []
+  );
 }
 
 function formatTideAmPm(
@@ -616,6 +892,30 @@ function getTimeWindow(
     default:
       return null;
   }
+}
+
+function formatTimeFrameLabel(
+  frame: TimeFrame,
+  customStart: number,
+  customEnd: number,
+): string {
+  const window = getTimeWindow(frame, customStart, customEnd);
+  if (!window) {
+    return "All-day summary";
+  }
+
+  const label =
+    frame === "morning"
+      ? "Morning"
+      : frame === "afternoon"
+        ? "Afternoon"
+        : frame === "evening"
+          ? "Evening"
+          : "Custom";
+
+  return `${label} · ${formatClockHour(window.start)}–${formatClockHour(
+    window.end,
+  )}`;
 }
 
 function localHour(localDateTime: string): number {
@@ -674,6 +974,458 @@ function formatDateValue(
   return new Intl.DateTimeFormat("en-US", options).format(
     new Date(`${date}T12:00:00`),
   );
+}
+
+function buildPlainTextReport({
+  location,
+  selectedDate,
+  todayDate,
+  condition,
+  highF,
+  lowF,
+  timeFrameLabel,
+  items,
+  hourlyRows,
+  includeHourly,
+}: {
+  location: string;
+  selectedDate: string;
+  todayDate: string;
+  condition: string;
+  highF: number;
+  lowF: number;
+  timeFrameLabel: string;
+  items: ReportItem[];
+  hourlyRows: WeatherSourceData["hourly"];
+  includeHourly: boolean;
+}): string {
+  const lines = [
+    "TideHawk Fishing Report",
+    location,
+    `${formatReportDateHeading(selectedDate, todayDate)} · ${formatDateValue(
+      selectedDate,
+      { month: "short", day: "numeric", year: "numeric" },
+    )}`,
+    timeFrameLabel,
+    "",
+    `${condition} · High ${highF}°F · Low ${lowF}°F`,
+    "",
+    ...items.map((item) => `${item.label}: ${item.value}`),
+  ];
+
+  if (includeHourly) {
+    lines.push("", "Hourly conditions:");
+
+    if (hourlyRows.length === 0) {
+      lines.push("No hourly forecast points are available for this window.");
+    } else {
+      for (const hour of hourlyRows) {
+        lines.push(
+          `${formatHourFromLocalTime(hour.time)} — ${roundMeasurement(
+            celsiusToFahrenheit(hour.temperatureC),
+          )}°F · Rain ${formatPercent(hour.rainChancePercent)} · Wind ${roundMeasurement(
+            metersPerSecondToMph(hour.windSpeedMps),
+          )} mph ${hour.windDirectionLabel} · Gust ${roundMeasurement(
+            metersPerSecondToMph(hour.windGustMps),
+          )} mph`,
+        );
+      }
+    }
+  }
+
+  lines.push("", "Generated with TideHawk · tidehawk.app");
+  return lines.join("\n");
+}
+
+async function renderReportImage({
+  location,
+  selectedDate,
+  todayDate,
+  condition,
+  highF,
+  lowF,
+  timeFrameLabel,
+  items,
+  hourlyRows,
+  includeHourly,
+}: {
+  location: string;
+  selectedDate: string;
+  todayDate: string;
+  condition: string;
+  highF: number;
+  lowF: number;
+  timeFrameLabel: string;
+  items: ReportItem[];
+  hourlyRows: WeatherSourceData["hourly"];
+  includeHourly: boolean;
+}): Promise<Blob> {
+  const width = 1080;
+  const padding = 64;
+  const cardGap = 22;
+  const summaryColumns = 2;
+  const summaryRows = Math.ceil(items.length / summaryColumns);
+  const summaryCardHeight = 150;
+  const hourlyColumns = 3;
+  const hourlyCardHeight = 210;
+  const hourlyRowsCount = includeHourly
+    ? Math.max(1, Math.ceil(hourlyRows.length / hourlyColumns))
+    : 0;
+
+  const headerHeight = 360;
+  const summaryHeight =
+    summaryRows * summaryCardHeight +
+    Math.max(0, summaryRows - 1) * cardGap;
+  const hourlyHeight = includeHourly
+    ? 140 +
+      hourlyRowsCount * hourlyCardHeight +
+      Math.max(0, hourlyRowsCount - 1) * cardGap
+    : 0;
+  const footerHeight = 120;
+  const height = Math.max(
+    1350,
+    padding * 2 +
+      headerHeight +
+      summaryHeight +
+      hourlyHeight +
+      footerHeight,
+  );
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Image generation is not available in this browser.");
+  }
+
+  const background = "#f3f8f8";
+  const surface = "#ffffff";
+  const surfaceMuted = "#eaf3f3";
+  const foreground = "#12282b";
+  const muted = "#6b8083";
+  const accent = "#0b8793";
+  const border = "#cfe0e0";
+
+  context.fillStyle = background;
+  context.fillRect(0, 0, width, height);
+
+  let y = padding;
+
+  context.fillStyle = accent;
+  context.font = "700 38px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.fillText("TideHawk", padding, y + 36);
+
+  context.fillStyle = foreground;
+  context.font = "700 58px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.fillText("Fishing Report", padding, y + 108);
+
+  context.fillStyle = muted;
+  context.font = "500 28px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  drawTextWrapped(context, location, padding, y + 158, width - padding * 2, 36, 2);
+
+  context.fillStyle = accent;
+  context.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.fillText(
+    `${formatReportDateHeading(selectedDate, todayDate).toUpperCase()} · ${formatDateValue(
+      selectedDate,
+      { month: "short", day: "numeric", year: "numeric" },
+    )}`,
+    padding,
+    y + 236,
+  );
+
+  context.fillStyle = muted;
+  context.font = "600 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.fillText(timeFrameLabel, padding, y + 278);
+
+  context.fillStyle = foreground;
+  context.font = "700 36px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  drawTextWrapped(
+    context,
+    `${condition} · High ${highF}° · Low ${lowF}°F`,
+    padding,
+    y + 334,
+    width - padding * 2,
+    42,
+    2,
+  );
+
+  y += headerHeight;
+
+  const summaryCardWidth =
+    (width - padding * 2 - cardGap) / summaryColumns;
+
+  items.forEach((item, index) => {
+    const column = index % summaryColumns;
+    const row = Math.floor(index / summaryColumns);
+    const x = padding + column * (summaryCardWidth + cardGap);
+    const cardY = y + row * (summaryCardHeight + cardGap);
+
+    drawRoundedRect(
+      context,
+      x,
+      cardY,
+      summaryCardWidth,
+      summaryCardHeight,
+      24,
+      surface,
+      border,
+    );
+
+    context.fillStyle = muted;
+    context.font = "600 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    drawTextWrapped(
+      context,
+      item.label,
+      x + 24,
+      cardY + 40,
+      summaryCardWidth - 48,
+      28,
+      2,
+    );
+
+    context.fillStyle = foreground;
+    context.font = fitCanvasFont(
+      context,
+      item.value,
+      summaryCardWidth - 48,
+      31,
+      23,
+      700,
+    );
+    drawTextWrapped(
+      context,
+      item.value,
+      x + 24,
+      cardY + 100,
+      summaryCardWidth - 48,
+      34,
+      2,
+    );
+  });
+
+  y += summaryHeight;
+
+  if (includeHourly) {
+    y += 72;
+    context.fillStyle = foreground;
+    context.font = "700 34px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    context.fillText("Hourly conditions", padding, y);
+
+    context.fillStyle = muted;
+    context.font = "500 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+    context.fillText(
+      "Temperature · rain · wind · gusts",
+      padding,
+      y + 38,
+    );
+    y += 70;
+
+    const hourlyCardWidth =
+      (width - padding * 2 - cardGap * (hourlyColumns - 1)) /
+      hourlyColumns;
+
+    if (hourlyRows.length === 0) {
+      drawRoundedRect(
+        context,
+        padding,
+        y,
+        width - padding * 2,
+        hourlyCardHeight,
+        24,
+        surfaceMuted,
+        border,
+      );
+      context.fillStyle = muted;
+      context.font = "600 26px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+      context.textAlign = "center";
+      context.fillText(
+        "No hourly forecast points for this window",
+        width / 2,
+        y + hourlyCardHeight / 2,
+      );
+      context.textAlign = "start";
+    } else {
+      hourlyRows.forEach((hour, index) => {
+        const column = index % hourlyColumns;
+        const row = Math.floor(index / hourlyColumns);
+        const x =
+          padding + column * (hourlyCardWidth + cardGap);
+        const cardY = y + row * (hourlyCardHeight + cardGap);
+
+        drawRoundedRect(
+          context,
+          x,
+          cardY,
+          hourlyCardWidth,
+          hourlyCardHeight,
+          22,
+          surface,
+          border,
+        );
+
+        context.fillStyle = accent;
+        context.font = "700 24px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        context.fillText(
+          formatHourFromLocalTime(hour.time),
+          x + 20,
+          cardY + 36,
+        );
+
+        context.fillStyle = foreground;
+        context.font = "700 36px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        context.fillText(
+          `${roundMeasurement(celsiusToFahrenheit(hour.temperatureC))}°F`,
+          x + 20,
+          cardY + 86,
+        );
+
+        context.fillStyle = muted;
+        context.font = "600 19px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+        context.fillText(
+          `Rain ${formatPercent(hour.rainChancePercent)}`,
+          x + 20,
+          cardY + 124,
+        );
+        context.fillText(
+          `Wind ${roundMeasurement(
+            metersPerSecondToMph(hour.windSpeedMps),
+          )} mph ${hour.windDirectionLabel}`,
+          x + 20,
+          cardY + 156,
+        );
+        context.fillText(
+          `Gust ${roundMeasurement(
+            metersPerSecondToMph(hour.windGustMps),
+          )} mph`,
+          x + 20,
+          cardY + 188,
+        );
+      });
+    }
+
+    y +=
+      hourlyRowsCount * hourlyCardHeight +
+      Math.max(0, hourlyRowsCount - 1) * cardGap;
+  }
+
+  context.fillStyle = accent;
+  context.font = "700 22px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.fillText("tidehawk.app", padding, height - 58);
+
+  context.fillStyle = muted;
+  context.font = "500 20px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+  context.textAlign = "right";
+  context.fillText("Generated with TideHawk", width - padding, height - 58);
+  context.textAlign = "start";
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error("Unable to create the report image."));
+        }
+      },
+      "image/png",
+      0.95,
+    );
+  });
+}
+
+function drawRoundedRect(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  fill: string,
+  stroke?: string,
+) {
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
+  context.fillStyle = fill;
+  context.fill();
+  if (stroke) {
+    context.strokeStyle = stroke;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+}
+
+function drawTextWrapped(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+  maxLines: number,
+) {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (
+      context.measureText(candidate).width <= maxWidth ||
+      !line
+    ) {
+      line = candidate;
+      continue;
+    }
+
+    lines.push(line);
+    line = word;
+    if (lines.length === maxLines - 1) {
+      break;
+    }
+  }
+
+  if (line && lines.length < maxLines) {
+    lines.push(line);
+  }
+
+  lines.slice(0, maxLines).forEach((value, index) => {
+    let output = value;
+    if (
+      index === maxLines - 1 &&
+      context.measureText(output).width > maxWidth
+    ) {
+      while (
+        output.length > 1 &&
+        context.measureText(`${output}…`).width > maxWidth
+      ) {
+        output = output.slice(0, -1);
+      }
+      output += "…";
+    }
+    context.fillText(output, x, y + index * lineHeight);
+  });
+}
+
+function fitCanvasFont(
+  context: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  preferredSize: number,
+  minimumSize: number,
+  weight: number,
+): string {
+  let size = preferredSize;
+  while (size > minimumSize) {
+    context.font = `${weight} ${size}px system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
+    if (context.measureText(text).width <= maxWidth) {
+      break;
+    }
+    size -= 1;
+  }
+  return `${weight} ${size}px system-ui, -apple-system, BlinkMacSystemFont, sans-serif`;
 }
 
 function ReportIcon() {
