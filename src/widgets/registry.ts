@@ -195,6 +195,36 @@ export const widgetDefinitions: WidgetDefinition[] = [
     ),
   },
   {
+    key: "flow-visualizer",
+    name: "Wind & Tide Flow Map",
+    description:
+      "Directional map showing wind movement or modeled tide/current flow around a chosen fishing spot.",
+    category: "wind",
+    sourceKind: "weather-location",
+    defaultTitle: "Wind & Tide Flow",
+    defaultSettings: {
+      mode: "wind",
+      radiusMiles: 20,
+      density: 5,
+      showSourceLabel: false,
+      showLastUpdated: false,
+    },
+    defaultPlacement: placements(
+      {
+        w: 6,
+        h: 5,
+        minW: 4,
+        minH: 4,
+      },
+      {
+        w: 4,
+        h: 5,
+        minW: 4,
+        minH: 4,
+      },
+    ),
+  },
+  {
     key: "wind-speed",
     name: "Wind Speed",
     description: "Current sustained wind speed.",

@@ -19,6 +19,7 @@ export type WidgetKey =
   | "hourly-forecast"
   | "daily-forecast"
   | "radar-map"
+  | "flow-visualizer"
   | "wind-speed"
   | "wind-gusts"
   | "wind-direction"

@@ -36,6 +36,7 @@ import {
   SunriseSunsetWidget,
 } from "@/widgets/astronomy/AstronomyWidgets";
 import { RadarWidget } from "@/widgets/radar/RadarWidget";
+import { FlowVisualizationWidget } from "@/widgets/flow/FlowVisualizationWidget";
 
 export const widgetComponents: Record<
   WidgetKey,
@@ -50,6 +51,7 @@ export const widgetComponents: Record<
   "hourly-forecast": HourlyForecastWidget,
   "daily-forecast": DailyForecastWidget,
   "radar-map": RadarWidget,
+  "flow-visualizer": FlowVisualizationWidget,
   "wind-speed": WindSpeedWidget,
   "wind-gusts": WindGustsWidget,
   "wind-direction": WindDirectionWidget,
