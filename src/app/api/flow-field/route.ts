@@ -31,6 +31,8 @@ const WEATHER_URL =
   "https://api.open-meteo.com/v1/forecast";
 const MARINE_URL =
   "https://marine-api.open-meteo.com/v1/marine";
+const ELEVATION_URL =
+  "https://api.open-meteo.com/v1/elevation";
 
 export async function GET(request: NextRequest) {
   const latitude = parseNumber(
@@ -191,14 +193,27 @@ async function fetchFlowPoints(
     );
   }
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-    },
-    next: {
-      revalidate: 900,
-    },
-  });
+  /*
+   * Tide/current requests use Open-Meteo's sea-cell preference,
+   * which intentionally resolves even a land coordinate to a
+   * nearby ocean model cell. That is useful for getting the flow
+   * value, but it also means we need a separate high-resolution
+   * land/water mask before putting the arrow back on our requested
+   * visualization point.
+   */
+  const [response, waterMask] = await Promise.all([
+    fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+      next: {
+        revalidate: 900,
+      },
+    }),
+    mode === "current"
+      ? fetchWaterMask(requestedPoints)
+      : Promise.resolve<boolean[] | null>(null),
+  ]);
 
   if (!response.ok) {
     throw new Error(
@@ -214,21 +229,88 @@ async function fetchFlowPoints(
     ? payload
     : [payload];
 
-  const normalized = rawPoints
-    .map((raw, index) =>
-      normalizePoint(
+  return rawPoints
+    .map((raw, index) => {
+      if (
+        mode === "current" &&
+        waterMask?.[index] === false
+      ) {
+        return null;
+      }
+
+      return normalizePoint(
         raw,
         requestedPoints[index] ??
           requestedPoints[0],
         mode,
-      ),
-    )
+      );
+    })
     .filter(
       (point): point is FlowPoint =>
         point !== null,
     );
+}
 
-  return normalized;
+async function fetchWaterMask(
+  requestedPoints: RequestedPoint[],
+): Promise<boolean[]> {
+  const url = new URL(ELEVATION_URL);
+
+  url.searchParams.set(
+    "latitude",
+    requestedPoints
+      .map((point) => point.latitude.toFixed(5))
+      .join(","),
+  );
+  url.searchParams.set(
+    "longitude",
+    requestedPoints
+      .map((point) => point.longitude.toFixed(5))
+      .join(","),
+  );
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+    next: {
+      revalidate: 86400,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Open-Meteo elevation returned ${response.status} ${response.statusText}.`,
+    );
+  }
+
+  const payload =
+    (await response.json()) as {
+      elevation?: unknown;
+    };
+
+  if (!Array.isArray(payload.elevation)) {
+    throw new Error(
+      "Open-Meteo elevation did not return a usable land mask.",
+    );
+  }
+
+  /*
+   * Copernicus DEM reports open water at about sea level.
+   * A small +0.5 m tolerance keeps tiny interpolation noise from
+   * punching holes in the water while still removing ordinary
+   * beaches, roads, dunes, marsh islands, and inland terrain.
+   */
+  return requestedPoints.map((_, index) => {
+    const elevation =
+      payload.elevation?.[index];
+
+    return (
+      typeof elevation === "number" &&
+      Number.isFinite(elevation) &&
+      elevation <= 0.5
+    );
+  });
 }
 
 function normalizePoint(
@@ -309,28 +391,59 @@ function buildGrid(
   const longitudeRadius =
     radiusMiles /
     longitudeMilesPerDegree;
-  const half = (density - 1) / 2;
+
+  /*
+   * Use a staggered hex lattice rather than a rectangular NxN
+   * matrix. Hex spacing is visually uniform in every direction,
+   * and clipping it to a circular footprint prevents the arrows
+   * from visibly tracing a square around the selected area.
+   */
+  const horizontalSpacing =
+    2 / Math.max(1, density - 1);
+  const verticalSpacing =
+    horizontalSpacing *
+    (Math.sqrt(3) / 2);
+  const maximumRow =
+    Math.ceil(
+      1 / verticalSpacing,
+    );
+  const maximumColumn =
+    Math.ceil(
+      1 / horizontalSpacing,
+    ) + 1;
+  const footprintRadiusSquared =
+    1.05 ** 2;
 
   const points: RequestedPoint[] = [];
 
   for (
-    let row = 0;
-    row < density;
+    let row = -maximumRow;
+    row <= maximumRow;
     row += 1
   ) {
+    const y =
+      row * verticalSpacing;
+    const rowOffset =
+      Math.abs(row) % 2 === 1
+        ? horizontalSpacing / 2
+        : 0;
+
     for (
-      let column = 0;
-      column < density;
+      let column = -maximumColumn;
+      column <= maximumColumn;
       column += 1
     ) {
-      const y =
-        half === 0
-          ? 0
-          : (row - half) / half;
       const x =
-        half === 0
-          ? 0
-          : (column - half) / half;
+        column *
+          horizontalSpacing +
+        rowOffset;
+
+      if (
+        x * x + y * y >
+        footprintRadiusSquared
+      ) {
+        continue;
+      }
 
       points.push({
         latitude: clamp(
