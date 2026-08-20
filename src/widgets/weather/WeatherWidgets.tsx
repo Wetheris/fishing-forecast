@@ -255,6 +255,9 @@ export function ForecastOverviewWidget({
               <div className="min-w-[120px] flex-[1_1_160px]">
                 <ForecastDaySelector
                   daily={data.daily}
+                  selectedDate={
+                    forecastContext.selectedDate
+                  }
                   todayDate={
                     forecastContext.todayDate
                   }
@@ -772,9 +775,6 @@ export function HourlyForecastWidget({
                   hours={selectedHours}
                   metric={metric}
                   unit={unit}
-                  selectedDate={
-                    forecastContext.selectedDate
-                  }
                   astronomyData={
                     astronomyState?.status === "success" &&
                     astronomyState.data.date ===
