@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { summarizeWeatherDay } from "@/lib/weather-summary";
 import {
   celsiusToFahrenheit,
@@ -123,6 +123,9 @@ export function FishingReportDialog({
     useState<TimeFrame>("all");
   const [customStart, setCustomStart] = useState(6);
   const [customEnd, setCustomEnd] = useState(18);
+  const timeFrameRef = useRef<TimeFrame>("all");
+  const customStartRef = useRef(6);
+  const customEndRef = useRef(18);
   const [generated, setGenerated] =
     useState<GeneratedReport | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -176,23 +179,15 @@ export function FishingReportDialog({
     customEnd,
   );
 
-  const hourlyRows = useMemo(() => {
-    if (!weatherData || !hourlyWindow) {
-      return [];
-    }
-
-    return weatherData.hourly.filter((hour) => {
-      if (hour.time.slice(0, 10) !== selectedDate) {
-        return false;
-      }
-
-      const hourValue = localHour(hour.time);
-      return (
-        hourValue >= hourlyWindow.start &&
-        hourValue < hourlyWindow.end
-      );
-    });
-  }, [hourlyWindow, selectedDate, weatherData]);
+  const hourlyRows = useMemo(
+    () =>
+      getHourlyRows(
+        weatherData,
+        selectedDate,
+        hourlyWindow,
+      ),
+    [hourlyWindow, selectedDate, weatherData],
+  );
 
   const reportItems = useMemo<ReportItem[]>(
     () =>
@@ -252,6 +247,28 @@ export function FishingReportDialog({
       return;
     }
 
+    // Snapshot the controls at click time. Mobile native selects can
+    // commit immediately before this button is pressed, so generation
+    // should not depend on a previous render's derived time window.
+    const snapshotTimeFrame = timeFrameRef.current;
+    const snapshotCustomStart = customStartRef.current;
+    const snapshotCustomEnd = customEndRef.current;
+    const snapshotHourlyWindow = getTimeWindow(
+      snapshotTimeFrame,
+      snapshotCustomStart,
+      snapshotCustomEnd,
+    );
+    const snapshotTimeFrameLabel = formatTimeFrameLabel(
+      snapshotTimeFrame,
+      snapshotCustomStart,
+      snapshotCustomEnd,
+    );
+    const snapshotHourlyRows = getHourlyRows(
+      weatherData,
+      selectedDate,
+      snapshotHourlyWindow,
+    );
+
     setGenerating(true);
     setMessage(undefined);
 
@@ -267,10 +284,10 @@ export function FishingReportDialog({
         lowF: roundMeasurement(
           celsiusToFahrenheit(selectedDay.temperatureMinC),
         ),
-        timeFrameLabel,
+        timeFrameLabel: snapshotTimeFrameLabel,
         items: reportItems,
-        hourlyRows,
-        includeHourly: Boolean(hourlyWindow),
+        hourlyRows: snapshotHourlyRows,
+        includeHourly: Boolean(snapshotHourlyWindow),
       });
 
       const imageBlob = await renderReportImage({
@@ -284,10 +301,10 @@ export function FishingReportDialog({
         lowF: roundMeasurement(
           celsiusToFahrenheit(selectedDay.temperatureMinC),
         ),
-        timeFrameLabel,
+        timeFrameLabel: snapshotTimeFrameLabel,
         items: reportItems,
-        hourlyRows,
-        includeHourly: Boolean(hourlyWindow),
+        hourlyRows: snapshotHourlyRows,
+        includeHourly: Boolean(snapshotHourlyWindow),
       });
 
       const filename = `tidehawk-fishing-report-${selectedDate}.png`;
@@ -432,9 +449,11 @@ export function FishingReportDialog({
               </span>
               <select
                 value={timeFrame}
-                onChange={(event) =>
-                  setTimeFrame(event.target.value as TimeFrame)
-                }
+                onChange={(event) => {
+                  const next = event.target.value as TimeFrame;
+                  timeFrameRef.current = next;
+                  setTimeFrame(next);
+                }}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm font-medium outline-none focus:border-[var(--accent)]"
               >
                 {TIME_FRAME_OPTIONS.map((option) => (
@@ -453,9 +472,12 @@ export function FishingReportDialog({
                 value={customStart}
                 maximum={23}
                 onChange={(next) => {
+                  customStartRef.current = next;
                   setCustomStart(next);
-                  if (next >= customEnd) {
-                    setCustomEnd(Math.min(24, next + 1));
+                  if (next >= customEndRef.current) {
+                    const nextEnd = Math.min(24, next + 1);
+                    customEndRef.current = nextEnd;
+                    setCustomEnd(nextEnd);
                   }
                 }}
               />
@@ -463,7 +485,10 @@ export function FishingReportDialog({
                 label="To"
                 value={customEnd}
                 minimum={customStart + 1}
-                onChange={setCustomEnd}
+                onChange={(next) => {
+                  customEndRef.current = next;
+                  setCustomEnd(next);
+                }}
               />
             </div>
           ) : null}
@@ -916,6 +941,28 @@ function formatTimeFrameLabel(
   return `${label} · ${formatClockHour(window.start)}–${formatClockHour(
     window.end,
   )}`;
+}
+
+function getHourlyRows(
+  weatherData: WeatherSourceData | null,
+  selectedDate: string,
+  window: { start: number; end: number } | null,
+): WeatherSourceData["hourly"] {
+  if (!weatherData || !window) {
+    return [];
+  }
+
+  return weatherData.hourly.filter((hour) => {
+    if (hour.time.slice(0, 10) !== selectedDate) {
+      return false;
+    }
+
+    const hourValue = localHour(hour.time);
+    return (
+      hourValue >= window.start &&
+      hourValue < window.end
+    );
+  });
 }
 
 function localHour(localDateTime: string): number {
