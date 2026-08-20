@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     parseNumber(
       request.nextUrl.searchParams.get("radiusMiles"),
     ) ?? 20,
-    1.5,
+    0.5,
     60,
   );
   const density = normalizeDensity(
@@ -228,12 +228,6 @@ async function fetchFlowPoints(
         point !== null,
     );
 
-  if (mode === "current") {
-    return deduplicateResolvedSeaPoints(
-      normalized,
-    );
-  }
-
   return normalized;
 }
 
@@ -279,16 +273,18 @@ function normalizePoint(
       : normalizeDegrees(sourceDirection);
 
   return {
-    latitude:
-      mode === "current" &&
-      isFiniteNumber(raw.latitude)
-        ? raw.latitude
-        : requested.latitude,
-    longitude:
-      mode === "current" &&
-      isFiniteNumber(raw.longitude)
-        ? raw.longitude
-        : requested.longitude,
+    /*
+     * Keep visualization arrows on the requested sampling grid.
+     * Open-Meteo may resolve nearby marine requests to the same
+     * coarse ocean-model cell; using raw.latitude/raw.longitude
+     * here caused arrows to jump several miles away and disappear
+     * from close zoom levels.
+     *
+     * Repeated values at high zoom are expected and honestly show
+     * the model's true spatial resolution better than hiding them.
+     */
+    latitude: requested.latitude,
+    longitude: requested.longitude,
     speedMph: speedKmh * 0.621371,
     directionDegrees,
   };
@@ -352,26 +348,6 @@ function buildGrid(
   }
 
   return points;
-}
-
-function deduplicateResolvedSeaPoints(
-  points: FlowPoint[],
-): FlowPoint[] {
-  const seen = new Set<string>();
-
-  return points.filter((point) => {
-    const key = [
-      point.latitude.toFixed(3),
-      point.longitude.toFixed(3),
-    ].join(":");
-
-    if (seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
 }
 
 function normalizeDensity(

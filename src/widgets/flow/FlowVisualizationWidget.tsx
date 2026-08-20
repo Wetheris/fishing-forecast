@@ -143,10 +143,11 @@ export function FlowVisualizationWidget({
     "function";
 
   /*
-   * Tighten the model sampling grid as the user zooms in.
-   * Wind can benefit from a smaller footprint; modeled ocean
-   * currents stay at least 5 miles because the underlying
-   * current grid is comparatively coarse near shore.
+   * Tighten the visualization sampling grid as the user zooms in.
+   * Modeled ocean currents are spatially coarse, so nearby arrows
+   * can legitimately share the same direction/speed at close zoom.
+   * Keeping the requested grid tight is still more useful visually
+   * than pushing the resolved model cells off-screen.
    */
   const adaptiveRadiusMiles =
     getAdaptiveRadiusMiles(
@@ -1511,8 +1512,8 @@ function getAdaptiveRadiusMiles(
       );
   const minimum =
     mode === "current"
-      ? 5
-      : 1.5;
+      ? 0.75
+      : 0.75;
 
   return clamp(
     scaled,
