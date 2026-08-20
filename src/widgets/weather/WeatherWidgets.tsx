@@ -645,6 +645,13 @@ export function HourlyForecastWidget({
       "density",
       "standard",
     ) === "compact";
+  const compactSmall =
+    compact &&
+    stringSetting(
+      widget.settings,
+      "fontSize",
+      "medium",
+    ) === "small";
 
   return (
     <WeatherDataView state={weatherState}>
@@ -691,18 +698,32 @@ export function HourlyForecastWidget({
           <div
             className={[
               "flex h-full min-h-0 flex-col overflow-hidden",
-              compact ? "gap-1" : "gap-3",
+              compactSmall
+                ? "gap-0.5"
+                : compact
+                  ? "gap-1"
+                  : "gap-3",
             ].join(" ")}
           >
-            <div className="flex shrink-0 flex-nowrap items-center justify-between gap-2 overflow-x-auto">
+            <div
+              className={[
+                "flex shrink-0 flex-nowrap items-center justify-between overflow-x-auto",
+                compactSmall ? "gap-1" : "gap-2",
+              ].join(" ")}
+            >
               <div
                 className={[
                   "flex shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]",
-                  compact ? "p-0.5" : "p-1",
+                  compactSmall
+                    ? "p-px"
+                    : compact
+                      ? "p-0.5"
+                      : "p-1",
                 ].join(" ")}
               >
                 <MetricTab
                   compact={compact}
+                  tiny={compactSmall}
                   active={metric === "temperature"}
                   onClick={() =>
                     setMetric("temperature")
@@ -712,6 +733,7 @@ export function HourlyForecastWidget({
                 </MetricTab>
                 <MetricTab
                   compact={compact}
+                  tiny={compactSmall}
                   active={metric === "precipitation"}
                   onClick={() =>
                     setMetric("precipitation")
@@ -721,6 +743,7 @@ export function HourlyForecastWidget({
                 </MetricTab>
                 <MetricTab
                   compact={compact}
+                  tiny={compactSmall}
                   active={metric === "wind"}
                   onClick={() => setMetric("wind")}
                 >
@@ -735,9 +758,11 @@ export function HourlyForecastWidget({
                 }
                 className={[
                   "shrink-0 rounded-lg border border-[var(--border)] font-medium hover:bg-[var(--surface-muted)]",
-                  compact
-                    ? "px-2 py-0.5 text-[10px]"
-                    : "px-3 py-1.5 text-xs",
+                  compactSmall
+                    ? "px-1.5 py-px text-[9px]"
+                    : compact
+                      ? "px-2 py-0.5 text-[10px]"
+                      : "px-3 py-1.5 text-xs",
                 ].join(" ")}
               >
                 {compact
@@ -783,6 +808,7 @@ export function HourlyForecastWidget({
                       : null
                   }
                   compact={compact}
+                  compactSmall={compactSmall}
                 />
               )}
             </div>
@@ -925,12 +951,14 @@ function HourlyForecastStrip({
   unit,
   astronomyData,
   compact,
+  compactSmall,
 }: {
   hours: WeatherSourceData["hourly"];
   metric: ForecastMetric;
   unit: string;
   astronomyData: AstronomySourceData | null;
   compact: boolean;
+  compactSmall: boolean;
 }) {
   const solarMarkers = buildSolarMarkers(
     hours,
@@ -941,12 +969,18 @@ function HourlyForecastStrip({
     <div
       className={[
         "grid h-full min-h-0 grid-flow-col overflow-x-auto",
-        compact ? "gap-1.5" : "gap-2 pb-1",
+        compactSmall
+          ? "gap-1"
+          : compact
+            ? "gap-1.5"
+            : "gap-2 pb-1",
       ].join(" ")}
       style={{
-        gridAutoColumns: compact
-          ? "minmax(92px, 1fr)"
-          : "minmax(108px, 1fr)",
+        gridAutoColumns: compactSmall
+          ? "minmax(78px, 1fr)"
+          : compact
+            ? "minmax(88px, 1fr)"
+            : "minmax(108px, 1fr)",
       }}
     >
       {hours.map((hour) => {
@@ -957,32 +991,30 @@ function HourlyForecastStrip({
           <div
             key={`${metric}-${hour.time}`}
             className={[
-              "flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl bg-[var(--surface-muted)] text-center",
-              compact
-                ? "gap-1 px-1.5 py-1.5"
-                : "gap-1.5 px-2 py-2",
+              "flex min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden bg-[var(--surface-muted)] text-center",
+              compactSmall
+                ? "gap-0.5 rounded-lg px-1 py-0.5"
+                : compact
+                  ? "gap-0.5 rounded-xl px-1.5 py-0.5"
+                  : "gap-1.5 rounded-xl px-2 py-2",
             ].join(" ")}
           >
-            <div
-              className={[
-                "flex w-full min-w-0 items-center justify-center",
-                compact ? "min-h-3.5" : "min-h-4",
-              ].join(" ")}
-            >
-              {solarMarker ? (
-                <SolarEventLabel
-                  marker={solarMarker}
-                  compact={compact}
-                />
-              ) : null}
-            </div>
+            {solarMarker ? (
+              <SolarEventLabel
+                marker={solarMarker}
+                compact={compact}
+                small={compactSmall}
+              />
+            ) : null}
 
             <p
               className={[
                 "max-w-full truncate font-semibold tracking-tight text-[var(--foreground)]",
-                compact
-                  ? "text-xs leading-none"
-                  : "text-sm leading-none",
+                compactSmall
+                  ? "text-[10px] leading-none"
+                  : compact
+                    ? "text-[11px] leading-none"
+                    : "text-sm leading-none",
               ].join(" ")}
             >
               {formatLocalHour(hour.time)}
@@ -993,12 +1025,22 @@ function HourlyForecastStrip({
                 <WeatherConditionIcon
                   weatherCode={hour.weatherCode}
                   condition={hour.condition}
-                  size={compact ? 20 : 34}
+                  size={
+                    compactSmall
+                      ? 16
+                      : compact
+                        ? 18
+                        : 34
+                  }
                 />
                 <p
                   className={[
                     "max-w-full truncate font-semibold",
-                    compact ? "text-xs" : "text-sm",
+                    compactSmall
+                      ? "text-[10px] leading-none"
+                      : compact
+                        ? "text-[11px] leading-none"
+                        : "text-sm",
                   ].join(" ")}
                 >
                   {roundMeasurement(
@@ -1023,12 +1065,22 @@ function HourlyForecastStrip({
                 <WeatherConditionIcon
                   weatherCode={hour.weatherCode}
                   condition={hour.condition}
-                  size={compact ? 20 : 34}
+                  size={
+                    compactSmall
+                      ? 16
+                      : compact
+                        ? 18
+                        : 34
+                  }
                 />
                 <p
                   className={[
                     "max-w-full truncate font-semibold",
-                    compact ? "text-xs" : "text-sm",
+                    compactSmall
+                      ? "text-[10px] leading-none"
+                      : compact
+                        ? "text-[11px] leading-none"
+                        : "text-sm",
                   ].join(" ")}
                 >
                   {formatPercent(
@@ -1049,14 +1101,22 @@ function HourlyForecastStrip({
                   fromDegrees={
                     hour.windDirectionDegrees
                   }
-                  size={compact ? 20 : 34}
+                  size={
+                    compactSmall
+                      ? 16
+                      : compact
+                        ? 18
+                        : 34
+                  }
                 />
                 <p
                   className={[
                     "max-w-full truncate font-semibold",
-                    compact
-                      ? "text-[11px]"
-                      : "text-sm",
+                    compactSmall
+                      ? "text-[10px] leading-none"
+                      : compact
+                        ? "text-[11px] leading-none"
+                        : "text-sm",
                   ].join(" ")}
                 >
                   {formatMph(hour.windSpeedMps)}
@@ -1166,23 +1226,33 @@ function buildSolarMarkers(
 function SolarEventLabel({
   marker,
   compact,
+  small,
 }: {
   marker: SolarMarker;
   compact: boolean;
+  small: boolean;
 }) {
   return (
     <span
       className={[
-        "inline-flex max-w-full items-center justify-center gap-0.5 truncate font-medium text-[var(--accent)]",
-        compact
-          ? "text-[9px] leading-none"
-          : "text-[10px] leading-none",
+        "inline-flex max-w-full items-center justify-center gap-0.5 whitespace-nowrap font-medium text-[var(--accent)]",
+        small
+          ? "text-[8px] leading-none"
+          : compact
+            ? "text-[8px] leading-none"
+            : "text-[10px] leading-none",
       ].join(" ")}
       title={`${marker.label} ${marker.displayTime}`}
     >
-      <SolarEventIcon kind={marker.kind} />
-      <span className="truncate">
-        {marker.label} {marker.displayTime}
+      <SolarEventIcon
+        kind={marker.kind}
+        small={compact}
+      />
+      <span>
+        {marker.label}{" "}
+        {compact
+          ? marker.displayTime.replace(/\s+/g, "")
+          : marker.displayTime}
       </span>
     </span>
   );
@@ -1190,13 +1260,19 @@ function SolarEventLabel({
 
 function SolarEventIcon({
   kind,
+  small = false,
 }: {
   kind: SolarMarker["kind"];
+  small?: boolean;
 }) {
   return (
     <svg
       viewBox="0 0 16 16"
-      className="h-3 w-3 shrink-0"
+      className={
+        small
+          ? "h-2.5 w-2.5 shrink-0"
+          : "h-3 w-3 shrink-0"
+      }
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
@@ -1257,11 +1333,13 @@ function MetricTab({
   active,
   onClick,
   compact = false,
+  tiny = false,
   children,
 }: {
   active: boolean;
   onClick: () => void;
   compact?: boolean;
+  tiny?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -1270,9 +1348,11 @@ function MetricTab({
       onClick={onClick}
       className={[
         "rounded-lg",
-        compact
-          ? "px-2 py-0.5 text-[10px]"
-          : "px-3 py-1.5 text-xs",
+        tiny
+          ? "px-1.5 py-px text-[9px]"
+          : compact
+            ? "px-2 py-0.5 text-[10px]"
+            : "px-3 py-1.5 text-xs",
         active
           ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-sm"
           : "text-[var(--muted)]",

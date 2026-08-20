@@ -99,27 +99,12 @@ export function DashboardCanvas({
               minH: placement.minH,
             };
 
-        const compact = widget
-          ? stringSetting(
-              widget.settings,
-              "density",
-              "standard",
-            ) === "compact"
-          : false;
-        const migrateCompactMobileHourlyHeight =
-          widget?.widgetKey === "hourly-forecast" &&
-          layout.device === "mobile" &&
-          compact &&
-          placement.h < 3;
-
         return {
           i: placement.widgetId,
           x: placement.x,
           y: placement.y,
           w: placement.w,
-          h: migrateCompactMobileHourlyHeight
-            ? 3
-            : placement.h,
+          h: placement.h,
           minW: minimums.minW,
           minH: minimums.minH,
           maxW: placement.maxW,
@@ -435,7 +420,7 @@ function getEffectiveMinimums(
     case "hourly-forecast":
       return {
         minW: mobile ? 2 : 3,
-        minH: 3,
+        minH: mobile ? 2 : 3,
       };
 
     case "wind-forecast":
