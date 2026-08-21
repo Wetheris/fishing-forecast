@@ -91,6 +91,14 @@ export async function GET(request: NextRequest) {
   const longitude = parseNumber(
     request.nextUrl.searchParams.get("longitude"),
   );
+  const spotLatitude =
+    parseNumber(
+      request.nextUrl.searchParams.get("spotLatitude"),
+    ) ?? latitude;
+  const spotLongitude =
+    parseNumber(
+      request.nextUrl.searchParams.get("spotLongitude"),
+    ) ?? longitude;
   const requestedMode =
     request.nextUrl.searchParams.get("mode");
   const mode: FlowMode =
@@ -138,6 +146,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  if (
+    spotLatitude === null ||
+    spotLatitude < -90 ||
+    spotLatitude > 90 ||
+    spotLongitude === null ||
+    spotLongitude < -180 ||
+    spotLongitude > 180
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "A valid fishing spot latitude/longitude is required.",
+      },
+      { status: 400 },
+    );
+  }
+
   const grid = buildGrid(
     latitude,
     longitude,
@@ -150,8 +175,10 @@ export async function GET(request: NextRequest) {
       grid,
       mode,
       {
-        latitude,
-        longitude,
+        latitude:
+          spotLatitude,
+        longitude:
+          spotLongitude,
       },
     );
     const points = flow.points;
@@ -175,6 +202,12 @@ export async function GET(request: NextRequest) {
         center: {
           latitude,
           longitude,
+        },
+        spot: {
+          latitude:
+            spotLatitude,
+          longitude:
+            spotLongitude,
         },
         radiusMiles,
         density,
@@ -243,8 +276,16 @@ async function fetchFlowData(
     mode,
   );
 
+  const displayPoints =
+    mode === "current"
+      ? makeRegionalFallbackField(
+          points,
+          center,
+        )
+      : points;
+
   return {
-    points,
+    points: displayPoints,
     source:
       mode === "current"
         ? {
@@ -262,6 +303,60 @@ async function fetchFlowData(
           },
     forecast: [],
   };
+}
+
+function makeRegionalFallbackField(
+  points: FlowPoint[],
+  fishingSpot: RequestedPoint,
+): FlowPoint[] {
+  if (points.length === 0) {
+    return points;
+  }
+
+  /*
+   * Open-Meteo's ocean-current field is coarse (~8 km). Drawing
+   * neighboring cells with sharply different arrows makes the map
+   * look precise when it is not. Use the model vector nearest the
+   * selected fishing spot as a regional estimate, while preserving
+   * only the water positions from the display grid.
+   */
+  let representative =
+    points[0];
+
+  if (!representative) {
+    return points;
+  }
+
+  let nearestDistance =
+    distanceMiles(
+      fishingSpot.latitude,
+      fishingSpot.longitude,
+      representative.latitude,
+      representative.longitude,
+    );
+
+  for (const point of points.slice(1)) {
+    const distance =
+      distanceMiles(
+        fishingSpot.latitude,
+        fishingSpot.longitude,
+        point.latitude,
+        point.longitude,
+      );
+
+    if (distance < nearestDistance) {
+      representative = point;
+      nearestDistance = distance;
+    }
+  }
+
+  return points.map((point) => ({
+    ...point,
+    speedMph:
+      representative.speedMph,
+    directionDegrees:
+      representative.directionDegrees,
+  }));
 }
 
 async function fetchDbofsFlowData(
@@ -992,9 +1087,8 @@ async function fetchDapArray(
       .join("")}`;
 
   /*
-   * NOAA's THREDDS server rejects raw square brackets in a query
-   * string with HTTP 400. OPeNDAP hyperslab constraints therefore
-   * need to be percent-encoded before they are sent.
+   * NOAA THREDDS rejects raw square brackets in OPeNDAP query
+   * strings. Percent-encode the hyperslab constraint before fetch.
    */
   const encodedConstraint =
     encodeURIComponent(constraint);

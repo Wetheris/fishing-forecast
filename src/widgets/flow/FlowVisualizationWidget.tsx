@@ -26,6 +26,10 @@ type FlowFieldData = {
     latitude: number;
     longitude: number;
   };
+  spot?: {
+    latitude: number;
+    longitude: number;
+  };
   radiusMiles: number;
   density: number;
   speedRangeMph: {
@@ -200,6 +204,10 @@ export function FlowVisualizationWidget({
           viewLatitude.toFixed(5),
         longitude:
           viewLongitude.toFixed(5),
+        spotLatitude:
+          latitude.toFixed(5),
+        spotLongitude:
+          longitude.toFixed(5),
         mode,
         radiusMiles:
           adaptiveRadiusMiles.toFixed(2),
@@ -264,6 +272,8 @@ export function FlowVisualizationWidget({
   }, [
     adaptiveRadiusMiles,
     density,
+    latitude,
+    longitude,
     mode,
     viewLatitude,
     viewLongitude,
@@ -276,7 +286,11 @@ export function FlowVisualizationWidget({
 
   const representativePoint =
     data?.forecast?.[0] ??
-    data?.points[0];
+    findNearestFlowPoint(
+      data?.points ?? [],
+      latitude,
+      longitude,
+    );
 
   const speedLabel =
     data
@@ -435,7 +449,11 @@ export function FlowVisualizationWidget({
           className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow"
           title={`${data.source.detail} · ${data.source.resolution}`}
         >
-          {data.source.label}
+          {data.source.id ===
+          "open-meteo" &&
+          mode === "current"
+            ? "Open-Meteo · regional"
+            : data.source.label}
         </div>
       ) : null}
 
@@ -1745,6 +1763,40 @@ function formatBearing(
   return `${Math.round(
     normalized,
   )}°`;
+}
+
+function findNearestFlowPoint(
+  points: FlowPoint[],
+  latitude: number,
+  longitude: number,
+): FlowPoint | undefined {
+  let nearest:
+    FlowPoint | undefined;
+  let nearestDistance =
+    Number.POSITIVE_INFINITY;
+
+  for (const point of points) {
+    const latitudeDelta =
+      point.latitude - latitude;
+    const longitudeDelta =
+      (point.longitude - longitude) *
+      Math.cos(
+        latitude *
+          (Math.PI / 180),
+      );
+    const distance =
+      latitudeDelta *
+        latitudeDelta +
+      longitudeDelta *
+        longitudeDelta;
+
+    if (distance < nearestDistance) {
+      nearest = point;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
 }
 
 function formatCurrentSummary(
