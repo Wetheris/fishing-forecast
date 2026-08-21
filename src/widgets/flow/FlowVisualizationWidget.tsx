@@ -11,6 +11,10 @@ import type {
 } from "@/widgets/types";
 
 type FlowMode = "wind" | "current";
+type FlowBasemap =
+  | "streets"
+  | "satellite"
+  | "topo";
 
 type FlowPoint = {
   latitude: number;
@@ -130,6 +134,18 @@ export function FlowVisualizationWidget({
     widget.settings.showDepth === true;
   const [showDepth, setShowDepth] =
     useState(configuredDepth);
+  const configuredBasemap =
+    normalizeBasemap(
+      widget.settings.mapStyle,
+    );
+  const [basemap, setBasemap] =
+    useState<FlowBasemap>(
+      configuredBasemap,
+    );
+  const [
+    showMapMenu,
+    setShowMapMenu,
+  ] = useState(false);
 
   const latitude = finiteSetting(
     widget.settings.latitude,
@@ -216,6 +232,10 @@ export function FlowVisualizationWidget({
   useEffect(() => {
     setShowDepth(configuredDepth);
   }, [configuredDepth]);
+
+  useEffect(() => {
+    setBasemap(configuredBasemap);
+  }, [configuredBasemap]);
 
   useEffect(() => {
     const controller =
@@ -388,6 +408,19 @@ export function FlowVisualizationWidget({
     }
   }
 
+  function changeBasemap(
+    nextBasemap: FlowBasemap,
+  ) {
+    setBasemap(nextBasemap);
+    setShowMapMenu(false);
+
+    if (editable) {
+      onWidgetSettingsChange?.({
+        mapStyle: nextBasemap,
+      });
+    }
+  }
+
   return (
     <div
       className={[
@@ -413,6 +446,7 @@ export function FlowVisualizationWidget({
         data={data}
         editable={editable}
         showDepth={showDepth}
+        basemap={basemap}
         onLocationChange={(
           nextLatitude,
           nextLongitude,
@@ -491,6 +525,65 @@ export function FlowVisualizationWidget({
         >
           Depth
         </button>
+
+        <div className="relative">
+          <button
+            type="button"
+            aria-expanded={showMapMenu}
+            title="Change map style"
+            onClick={() =>
+              setShowMapMenu(
+                (open) => !open,
+              )
+            }
+            className="rounded-xl border border-white/70 bg-white/90 px-2.5 py-2 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
+          >
+            Map
+          </button>
+
+          {showMapMenu ? (
+            <div className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-[108px] overflow-hidden rounded-xl border border-white/80 bg-white/95 p-1 shadow-lg backdrop-blur">
+              <BasemapOption
+                active={
+                  basemap ===
+                  "streets"
+                }
+                onClick={() =>
+                  changeBasemap(
+                    "streets",
+                  )
+                }
+              >
+                Streets
+              </BasemapOption>
+              <BasemapOption
+                active={
+                  basemap ===
+                  "satellite"
+                }
+                onClick={() =>
+                  changeBasemap(
+                    "satellite",
+                  )
+                }
+              >
+                Satellite
+              </BasemapOption>
+              <BasemapOption
+                active={
+                  basemap === "topo"
+                }
+                onClick={() =>
+                  changeBasemap(
+                    "topo",
+                  )
+                }
+              >
+                Topo
+              </BasemapOption>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {editable ? (
@@ -537,6 +630,7 @@ function FlowMap({
   data,
   editable,
   showDepth,
+  basemap,
   onLocationChange,
   onCameraChange,
   onViewportBoundsChange,
@@ -547,6 +641,7 @@ function FlowMap({
   data: FlowFieldData | null;
   editable: boolean;
   showDepth: boolean;
+  basemap: FlowBasemap;
   onLocationChange: (
     latitude: number,
     longitude: number,
@@ -714,8 +809,10 @@ function FlowMap({
           centerWorld.y,
           localCamera.zoom,
           viewportSize,
+          basemap,
         ),
       [
+        basemap,
         centerWorld.x,
         centerWorld.y,
         localCamera.zoom,
@@ -1275,7 +1372,9 @@ function FlowMap({
       ) : null}
 
       <div className="pointer-events-none absolute bottom-0 right-0 z-10 bg-white/75 px-1.5 py-0.5 text-[8px] text-slate-600">
-        © OpenStreetMap
+        {basemapAttribution(
+          basemap,
+        )}
         {showDepth
           ? " · NOAA BlueTopo"
           : ""}
@@ -1460,6 +1559,31 @@ function MapControlButton({
   );
 }
 
+function BasemapOption({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "block w-full rounded-lg px-2.5 py-2 text-left text-[11px] transition",
+        active
+          ? "bg-slate-900 font-medium text-white"
+          : "text-slate-700 hover:bg-slate-100",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ModeButton({
   active,
   onClick,
@@ -1485,11 +1609,56 @@ function ModeButton({
   );
 }
 
+function normalizeBasemap(
+  value: unknown,
+): FlowBasemap {
+  if (
+    value === "satellite" ||
+    value === "topo"
+  ) {
+    return value;
+  }
+
+  return "streets";
+}
+
+function buildBasemapTileUrl(
+  basemap: FlowBasemap,
+  zoom: number,
+  x: number,
+  y: number,
+): string {
+  if (basemap === "satellite") {
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
+  }
+
+  if (basemap === "topo") {
+    return `https://tile.opentopomap.org/${zoom}/${x}/${y}.png`;
+  }
+
+  return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+}
+
+function basemapAttribution(
+  basemap: FlowBasemap,
+): string {
+  if (basemap === "satellite") {
+    return "Tiles © Esri";
+  }
+
+  if (basemap === "topo") {
+    return "© OpenTopoMap";
+  }
+
+  return "© OpenStreetMap";
+}
+
 function buildVisibleTiles(
   centerX: number,
   centerY: number,
   zoom: number,
   viewport: ViewportSize,
+  basemap: FlowBasemap,
 ): MapTile[] {
   const tileCount =
     2 ** zoom;
@@ -1556,7 +1725,12 @@ function buildVisibleTiles(
         key:
           `${zoom}:${rawX}:${rawY}`,
         url:
-          `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${rawY}.png`,
+          buildBasemapTileUrl(
+            basemap,
+            zoom,
+            wrappedX,
+            rawY,
+          ),
         zoom,
         x: wrappedX,
         y: rawY,
