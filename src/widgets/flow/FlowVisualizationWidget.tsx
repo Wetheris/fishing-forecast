@@ -72,6 +72,9 @@ type ViewportSize = {
 type MapTile = {
   key: string;
   url: string;
+  zoom: number;
+  x: number;
+  y: number;
   left: number;
   top: number;
 };
@@ -104,6 +107,10 @@ export function FlowVisualizationWidget({
     useState<FlowMode>(
       configuredMode,
     );
+  const configuredDepth =
+    widget.settings.showDepth === true;
+  const [showDepth, setShowDepth] =
+    useState(configuredDepth);
 
   const latitude = finiteSetting(
     widget.settings.latitude,
@@ -179,6 +186,10 @@ export function FlowVisualizationWidget({
   useEffect(() => {
     setMode(configuredMode);
   }, [configuredMode]);
+
+  useEffect(() => {
+    setShowDepth(configuredDepth);
+  }, [configuredDepth]);
 
   useEffect(() => {
     const controller =
@@ -296,6 +307,18 @@ export function FlowVisualizationWidget({
     }
   }
 
+  function toggleDepth() {
+    const nextDepth =
+      !showDepth;
+    setShowDepth(nextDepth);
+
+    if (editable) {
+      onWidgetSettingsChange?.({
+        showDepth: nextDepth,
+      });
+    }
+  }
+
   return (
     <div
       className={[
@@ -320,6 +343,7 @@ export function FlowVisualizationWidget({
         }}
         data={data}
         editable={editable}
+        showDepth={showDepth}
         onLocationChange={(
           nextLatitude,
           nextLongitude,
@@ -351,23 +375,40 @@ export function FlowVisualizationWidget({
         }}
       />
 
-      <div className="absolute left-2 top-2 z-30 flex overflow-hidden rounded-xl border border-white/70 bg-white/90 p-1 shadow-sm backdrop-blur">
-        <ModeButton
-          active={mode === "wind"}
-          onClick={() =>
-            changeMode("wind")
-          }
+      <div className="absolute left-2 top-2 z-30 flex items-center gap-1">
+        <div className="flex overflow-hidden rounded-xl border border-white/70 bg-white/90 p-1 shadow-sm backdrop-blur">
+          <ModeButton
+            active={mode === "wind"}
+            onClick={() =>
+              changeMode("wind")
+            }
+          >
+            Wind
+          </ModeButton>
+          <ModeButton
+            active={mode === "current"}
+            onClick={() =>
+              changeMode("current")
+            }
+          >
+            Tide flow
+          </ModeButton>
+        </div>
+
+        <button
+          type="button"
+          aria-pressed={showDepth}
+          title="Toggle NOAA BlueTopo depth layer"
+          onClick={toggleDepth}
+          className={[
+            "rounded-xl border border-white/70 px-2.5 py-2 text-[11px] font-medium shadow-sm backdrop-blur transition",
+            showDepth
+              ? "bg-slate-900 text-white"
+              : "bg-white/90 text-slate-700 hover:bg-white",
+          ].join(" ")}
         >
-          Wind
-        </ModeButton>
-        <ModeButton
-          active={mode === "current"}
-          onClick={() =>
-            changeMode("current")
-          }
-        >
-          Tide flow
-        </ModeButton>
+          Depth
+        </button>
       </div>
 
       {editable ? (
@@ -413,6 +454,7 @@ function FlowMap({
   camera,
   data,
   editable,
+  showDepth,
   onLocationChange,
   onCameraChange,
 }: {
@@ -421,6 +463,7 @@ function FlowMap({
   camera: Camera;
   data: FlowFieldData | null;
   editable: boolean;
+  showDepth: boolean;
   onLocationChange: (
     latitude: number,
     longitude: number,
@@ -996,6 +1039,63 @@ function FlowMap({
             ),
           )}
 
+          {showDepth
+            ? tiles.map(
+                (tile) => (
+                  <img
+                    key={`depth:${tile.key}`}
+                    src={buildBlueTopoTileUrl(
+                      tile.zoom,
+                      tile.x,
+                      tile.y,
+                      "bluetopo:bathymetry",
+                    )}
+                    alt=""
+                    draggable={false}
+                    data-depth-fallback="0"
+                    onError={(event) => {
+                      const image =
+                        event.currentTarget;
+
+                      if (
+                        image.dataset
+                          .depthFallback ===
+                        "0"
+                      ) {
+                        image.dataset.depthFallback =
+                          "1";
+                        image.src =
+                          buildBlueTopoTileUrl(
+                            tile.zoom,
+                            tile.x,
+                            tile.y,
+                            "bluetopo:elevation",
+                          );
+                        return;
+                      }
+
+                      image.style.display =
+                        "none";
+                    }}
+                    className="pointer-events-none absolute select-none"
+                    style={{
+                      width:
+                        TILE_SIZE,
+                      height:
+                        TILE_SIZE,
+                      left:
+                        tile.left,
+                      top:
+                        tile.top,
+                      maxWidth:
+                        "none",
+                      opacity: 0.72,
+                    }}
+                  />
+                ),
+              )
+            : null}
+
           {projectedFlowPoints.map(
             (point) => {
               const ratio =
@@ -1125,6 +1225,9 @@ function FlowMap({
 
       <div className="pointer-events-none absolute bottom-0 right-0 z-10 bg-white/75 px-1.5 py-0.5 text-[8px] text-slate-600">
         © OpenStreetMap
+        {showDepth
+          ? " · NOAA BlueTopo"
+          : ""}
       </div>
     </>
   );
@@ -1249,6 +1352,9 @@ function buildVisibleTiles(
           `${zoom}:${rawX}:${rawY}`,
         url:
           `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${rawY}.png`,
+        zoom,
+        x: wrappedX,
+        y: rawY,
         left:
           rawX *
             TILE_SIZE -
@@ -1396,6 +1502,64 @@ function rotateVector(
       x * sine +
       y * cosine,
   };
+}
+
+function buildBlueTopoTileUrl(
+  zoom: number,
+  x: number,
+  y: number,
+  layer: string,
+): string {
+  /*
+   * nowCOAST publishes BlueTopo through standard OGC web map
+   * services. Asking for the same 256px Web-Mercator footprint as
+   * each OSM tile lets the bathymetry sit directly under TideHawk's
+   * arrows without introducing another map library.
+   */
+  const earthRadius =
+    6378137;
+  const originShift =
+    Math.PI * earthRadius;
+  const tileSpan =
+    (2 * originShift) /
+    2 ** zoom;
+
+  const minimumX =
+    -originShift +
+    x * tileSpan;
+  const maximumX =
+    minimumX +
+    tileSpan;
+  const maximumY =
+    originShift -
+    y * tileSpan;
+  const minimumY =
+    maximumY -
+    tileSpan;
+
+  const search =
+    new URLSearchParams({
+      SERVICE: "WMS",
+      VERSION: "1.1.1",
+      REQUEST: "GetMap",
+      LAYERS: layer,
+      STYLES: "",
+      SRS: "EPSG:3857",
+      BBOX: [
+        minimumX,
+        minimumY,
+        maximumX,
+        maximumY,
+      ].join(","),
+      WIDTH:
+        TILE_SIZE.toString(),
+      HEIGHT:
+        TILE_SIZE.toString(),
+      FORMAT: "image/png",
+      TRANSPARENT: "true",
+    });
+
+  return `https://nowcoast.noaa.gov/geoserver/ows?${search.toString()}`;
 }
 
 function lngLatToWorld(
