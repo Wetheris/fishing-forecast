@@ -49,6 +49,7 @@ type FlowFieldData = {
     resolution: string;
   };
   spotCurrent?: FlowPoint;
+  spotWind?: FlowPoint;
   forecast?: Array<{
     validAt: string;
     speedMph: number;
@@ -236,10 +237,7 @@ export function FlowVisualizationWidget({
           density.toString(),
       });
 
-    if (
-      mode === "current" &&
-      viewportBounds
-    ) {
+    if (viewportBounds) {
       search.set(
         "north",
         viewportBounds.north.toFixed(
@@ -337,26 +335,30 @@ export function FlowVisualizationWidget({
       : null;
 
   const representativePoint =
-    data?.spotCurrent ??
-    data?.forecast?.[0] ??
-    findNearestFlowPoint(
-      data?.points ?? [],
-      latitude,
-      longitude,
-    );
+    mode === "current"
+      ? data?.spotCurrent ??
+        data?.forecast?.[0] ??
+        findNearestFlowPoint(
+          data?.points ?? [],
+          latitude,
+          longitude,
+        )
+      : data?.spotWind ??
+        findNearestFlowPoint(
+          data?.points ?? [],
+          latitude,
+          longitude,
+        );
 
   const speedLabel =
-    data
-      ? mode === "current" &&
-        representativePoint
+    data && representativePoint
+      ? mode === "current"
         ? formatCurrentSummary(
             representativePoint.speedMph,
             representativePoint.directionDegrees,
           )
-        : formatSpeedRange(
-            data.speedRangeMph.minimum,
-            data.speedRangeMph.maximum,
-            mode,
+        : formatWindSummary(
+            representativePoint.speedMph,
           )
       : mode === "wind"
         ? "Wind flow"
@@ -506,18 +508,16 @@ export function FlowVisualizationWidget({
             : speedLabel}
       </div>
 
-      {mode === "wind" ? (
-        <div className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow">
-          Arrows show movement
-        </div>
-      ) : data?.source ? (
+      {data?.source ? (
         <div
           className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow"
           title={`${data.source.detail} · ${data.source.resolution}`}
         >
-          {mode === "current"
-            ? `${data.source.label} field`
-            : data.source.label}
+          {`${data.source.label} ${
+            mode === "wind"
+              ? "wind"
+              : "current"
+          } field`}
         </div>
       ) : null}
 
@@ -764,19 +764,6 @@ function FlowMap({
         localCamera.zoom,
         viewportSize,
       ],
-    );
-
-  const maximumSpeed =
-    useMemo(
-      () =>
-        Math.max(
-          0.01,
-          ...(data?.points ?? []).map(
-            (point) =>
-              point.speedMph,
-          ),
-        ),
-      [data],
     );
 
   function commitCamera(
@@ -1202,65 +1189,14 @@ function FlowMap({
               )
             : null}
 
-          {data?.mode ===
-          "current" ? (
+          {data ? (
             <FlowStreakField
               points={
                 projectedFlowPoints
               }
+              mode={data.mode}
             />
-          ) : (
-            projectedFlowPoints.map(
-              (point) => {
-                const ratio =
-                  clamp(
-                    point.speedMph /
-                      maximumSpeed,
-                    0,
-                    1,
-                  );
-                const size =
-                  18 +
-                  ratio * 12;
-                const opacity =
-                  0.55 +
-                  ratio * 0.4;
-
-                return (
-                  <div
-                    key={[
-                      point.latitude.toFixed(
-                        5,
-                      ),
-                      point.longitude.toFixed(
-                        5,
-                      ),
-                    ].join(":")}
-                    className="pointer-events-none absolute flex items-center justify-center font-extrabold text-[#087f8c]"
-                    style={{
-                      left:
-                        point.position.x,
-                      top:
-                        point.position.y,
-                      width: size,
-                      height: size,
-                      fontSize: size,
-                      lineHeight: 1,
-                      opacity,
-                      textShadow:
-                        "0 1px 2px rgba(255,255,255,.95)",
-                      transform:
-                        `translate(-50%, -50%) rotate(${point.directionDegrees}deg)`,
-                      transformOrigin:
-                        "center",
-                    }}
-                  >
-                    ↑
-                  </div>
-                );
-              },
-            )
-          )}
+          ) : null}
 
           <div
             className="pointer-events-none absolute h-3 w-3 rounded-full border-2 border-white bg-[#087f8c] shadow"
@@ -1350,6 +1286,7 @@ function FlowMap({
 
 function FlowStreakField({
   points,
+  mode,
 }: {
   points: Array<
     FlowPoint & {
@@ -1359,6 +1296,7 @@ function FlowStreakField({
       };
     }
   >;
+  mode: FlowMode;
 }) {
   return (
     <>
@@ -1395,20 +1333,36 @@ function FlowStreakField({
               0,
               point.speedMph,
             );
+          const isWind =
+            mode === "wind";
           const duration =
-            clamp(
-              2.8 -
-                speed * 0.75,
-              0.9,
-              2.8,
-            );
+            isWind
+              ? clamp(
+                  2.1 -
+                    speed * 0.045,
+                  0.65,
+                  2.1,
+                )
+              : clamp(
+                  2.8 -
+                    speed * 0.75,
+                  0.9,
+                  2.8,
+                );
           const lineHeight =
-            9 +
-            clamp(
-              speed * 5,
-              0,
-              9,
-            );
+            isWind
+              ? 10 +
+                clamp(
+                  speed * 0.3,
+                  0,
+                  10,
+                )
+              : 9 +
+                clamp(
+                  speed * 5,
+                  0,
+                  9,
+                );
 
           return [0, 1].map(
             (particleIndex) => {
@@ -1449,8 +1403,12 @@ function FlowStreakField({
                   }}
                 >
                   <span
-                    className="tidehawk-current-streak absolute block w-[2px] rounded-full bg-[#087f8c] shadow-[0_0_2px_rgba(255,255,255,.9)]"
+                    className="tidehawk-current-streak absolute block rounded-full bg-[#087f8c] shadow-[0_0_2px_rgba(255,255,255,.9)]"
                     style={{
+                      width:
+                        isWind
+                          ? 1.5
+                          : 2,
                       height:
                         lineHeight,
                       left:
@@ -2128,6 +2086,14 @@ function findNearestFlowPoint(
   }
 
   return nearest;
+}
+
+function formatWindSummary(
+  speedMph: number,
+): string {
+  return `At spot · ${Math.round(
+    speedMph,
+  )} mph wind`;
 }
 
 function formatCurrentSummary(

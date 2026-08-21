@@ -52,6 +52,7 @@ type FlowFetchResult = {
   source: FlowSourceInfo;
   forecast: FlowForecastPoint[];
   spotCurrent?: FlowPoint;
+  spotWind?: FlowPoint;
   spotSource?: FlowSourceInfo;
 };
 
@@ -223,7 +224,6 @@ export async function GET(request: NextRequest) {
   }
 
   const grid =
-    mode === "current" &&
     viewportBounds
       ? buildViewportGrid(
           viewportBounds,
@@ -286,6 +286,8 @@ export async function GET(request: NextRequest) {
           flow.spotSource,
         spotCurrent:
           flow.spotCurrent,
+        spotWind:
+          flow.spotWind,
         forecast: flow.forecast,
         points,
       },
@@ -320,21 +322,34 @@ async function fetchFlowData(
   fishingSpot: RequestedPoint,
 ): Promise<FlowFetchResult> {
   if (mode !== "current") {
-    const points =
-      await fetchFlowPoints(
-        requestedPoints,
-        mode,
-      );
     const source: FlowSourceInfo = {
       id: "open-meteo",
       label: "Open-Meteo",
-      detail: "Weather forecast",
+      detail:
+        "Weather forecast wind field",
       resolution: "forecast grid",
     };
+    const [
+      points,
+      spotPoints,
+    ] = await Promise.all([
+      fetchFlowPoints(
+        requestedPoints,
+        "wind",
+      ),
+      fetchFlowPoints(
+        [fishingSpot],
+        "wind",
+      ),
+    ]);
 
     return {
       points,
       source,
+      spotWind:
+        spotPoints[0],
+      spotSource:
+        source,
       forecast: [],
     };
   }
