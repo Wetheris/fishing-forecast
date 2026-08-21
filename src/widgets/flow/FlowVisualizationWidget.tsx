@@ -13,8 +13,7 @@ import type {
 type FlowMode = "wind" | "current";
 type FlowBasemap =
   | "streets"
-  | "satellite"
-  | "topo";
+  | "satellite";
 
 type FlowPoint = {
   latitude: number;
@@ -142,10 +141,6 @@ export function FlowVisualizationWidget({
     useState<FlowBasemap>(
       configuredBasemap,
     );
-  const [
-    showMapMenu,
-    setShowMapMenu,
-  ] = useState(false);
 
   const latitude = finiteSetting(
     widget.settings.latitude,
@@ -408,18 +403,6 @@ export function FlowVisualizationWidget({
     }
   }
 
-  function changeBasemap(
-    nextBasemap: FlowBasemap,
-  ) {
-    setBasemap(nextBasemap);
-    setShowMapMenu(false);
-
-    if (editable) {
-      onWidgetSettingsChange?.({
-        mapStyle: nextBasemap,
-      });
-    }
-  }
 
   return (
     <div
@@ -526,64 +509,6 @@ export function FlowVisualizationWidget({
           Depth
         </button>
 
-        <div className="relative">
-          <button
-            type="button"
-            aria-expanded={showMapMenu}
-            title="Change map style"
-            onClick={() =>
-              setShowMapMenu(
-                (open) => !open,
-              )
-            }
-            className="rounded-xl border border-white/70 bg-white/90 px-2.5 py-2 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur transition hover:bg-white"
-          >
-            Map
-          </button>
-
-          {showMapMenu ? (
-            <div className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-[108px] overflow-hidden rounded-xl border border-white/80 bg-white/95 p-1 shadow-lg backdrop-blur">
-              <BasemapOption
-                active={
-                  basemap ===
-                  "streets"
-                }
-                onClick={() =>
-                  changeBasemap(
-                    "streets",
-                  )
-                }
-              >
-                Streets
-              </BasemapOption>
-              <BasemapOption
-                active={
-                  basemap ===
-                  "satellite"
-                }
-                onClick={() =>
-                  changeBasemap(
-                    "satellite",
-                  )
-                }
-              >
-                Satellite
-              </BasemapOption>
-              <BasemapOption
-                active={
-                  basemap === "topo"
-                }
-                onClick={() =>
-                  changeBasemap(
-                    "topo",
-                  )
-                }
-              >
-                Topo
-              </BasemapOption>
-            </div>
-          ) : null}
-        </div>
       </div>
 
       {editable ? (
@@ -1559,31 +1484,6 @@ function MapControlButton({
   );
 }
 
-function BasemapOption({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "block w-full rounded-lg px-2.5 py-2 text-left text-[11px] transition",
-        active
-          ? "bg-slate-900 font-medium text-white"
-          : "text-slate-700 hover:bg-slate-100",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
 function ModeButton({
   active,
   onClick,
@@ -1612,14 +1512,9 @@ function ModeButton({
 function normalizeBasemap(
   value: unknown,
 ): FlowBasemap {
-  if (
-    value === "satellite" ||
-    value === "topo"
-  ) {
-    return value;
-  }
-
-  return "streets";
+  return value === "satellite"
+    ? "satellite"
+    : "streets";
 }
 
 function buildBasemapTileUrl(
@@ -1632,10 +1527,6 @@ function buildBasemapTileUrl(
     return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${x}`;
   }
 
-  if (basemap === "topo") {
-    return `https://tile.opentopomap.org/${zoom}/${x}/${y}.png`;
-  }
-
   return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
 }
 
@@ -1644,10 +1535,6 @@ function basemapAttribution(
 ): string {
   if (basemap === "satellite") {
     return "Tiles © Esri";
-  }
-
-  if (basemap === "topo") {
-    return "© OpenTopoMap";
   }
 
   return "© OpenStreetMap";

@@ -683,6 +683,41 @@ function WidgetSpecificSettings({
     );
   }
 
+  if (widget.widgetKey === "flow-visualizer") {
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">
+          Flow map
+        </legend>
+
+        <SelectSetting
+          label="Map style"
+          value={
+            stringSetting(
+              widget.settings,
+              "mapStyle",
+              "streets",
+            ) === "satellite"
+              ? "satellite"
+              : "streets"
+          }
+          options={[
+            ["streets", "Standard"],
+            ["satellite", "Satellite"],
+          ]}
+          onChange={(value) =>
+            onChange("mapStyle", value)
+          }
+        />
+
+        <p className="text-xs leading-5 text-[var(--muted)]">
+          Sets the saved basemap for both Wind and Tide
+          Flow. Map controls stay uncluttered in dashboard
+          view.
+        </p>
+      </fieldset>
+    );
+  }
 
   if (widget.widgetKey === "radar-map") {
     return (
