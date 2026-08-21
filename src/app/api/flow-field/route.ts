@@ -991,9 +991,17 @@ async function fetchDapArray(
       )
       .join("")}`;
 
+  /*
+   * NOAA's THREDDS server rejects raw square brackets in a query
+   * string with HTTP 400. OPeNDAP hyperslab constraints therefore
+   * need to be percent-encoded before they are sent.
+   */
+  const encodedConstraint =
+    encodeURIComponent(constraint);
+
   const text =
     await fetchDbofsText(
-      `${DBOFS_DAP_URL}.ascii?${constraint}`,
+      `${DBOFS_DAP_URL}.ascii?${encodedConstraint}`,
       revalidateSeconds,
     );
   const values =
