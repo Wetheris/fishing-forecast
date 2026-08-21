@@ -32,6 +32,17 @@ type FlowFieldData = {
     minimum: number;
     maximum: number;
   };
+  source?: {
+    id: "noaa-dbofs" | "open-meteo";
+    label: string;
+    detail: string;
+    resolution: string;
+  };
+  forecast?: Array<{
+    validAt: string;
+    speedMph: number;
+    directionDegrees: number;
+  }>;
   points: FlowPoint[];
 };
 
@@ -252,13 +263,23 @@ export function FlowVisualizationWidget({
       ? flowState.data
       : null;
 
+  const representativePoint =
+    data?.forecast?.[0] ??
+    data?.points[0];
+
   const speedLabel =
     data
-      ? formatSpeedRange(
-          data.speedRangeMph.minimum,
-          data.speedRangeMph.maximum,
-          mode,
-        )
+      ? mode === "current" &&
+        representativePoint
+        ? formatCurrentSummary(
+            representativePoint.speedMph,
+            representativePoint.directionDegrees,
+          )
+        : formatSpeedRange(
+            data.speedRangeMph.minimum,
+            data.speedRangeMph.maximum,
+            mode,
+          )
       : mode === "wind"
         ? "Wind flow"
         : "Modeled tide/current flow";
@@ -367,6 +388,13 @@ export function FlowVisualizationWidget({
       {mode === "wind" ? (
         <div className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow">
           Arrows show movement
+        </div>
+      ) : data?.source ? (
+        <div
+          className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow"
+          title={`${data.source.detail} · ${data.source.resolution}`}
+        >
+          {data.source.label}
         </div>
       ) : null}
 
@@ -1553,6 +1581,58 @@ function formatBearing(
   return `${Math.round(
     normalized,
   )}°`;
+}
+
+function formatCurrentSummary(
+  speedMph: number,
+  directionDegrees: number,
+): string {
+  const direction =
+    ((directionDegrees % 360) +
+      360) %
+    360;
+
+  return `Current · ${speedMph.toFixed(
+    1,
+  )} mph · ${Math.round(
+    direction,
+  )}° ${formatCompassDirection(
+    direction,
+  )}`;
+}
+
+function formatCompassDirection(
+  directionDegrees: number,
+): string {
+  const directions = [
+    "N",
+    "NNE",
+    "NE",
+    "ENE",
+    "E",
+    "ESE",
+    "SE",
+    "SSE",
+    "S",
+    "SSW",
+    "SW",
+    "WSW",
+    "W",
+    "WNW",
+    "NW",
+    "NNW",
+  ] as const;
+  const index =
+    Math.round(
+      directionDegrees /
+        22.5,
+    ) %
+    directions.length;
+
+  return (
+    directions[index] ??
+    "N"
+  );
 }
 
 function formatSpeedRange(
