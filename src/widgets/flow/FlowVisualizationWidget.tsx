@@ -1808,7 +1808,7 @@ function formatCurrentSummary(
       360) %
     360;
 
-  return `Current · ${speedMph.toFixed(
+  return `At spot · ${speedMph.toFixed(
     1,
   )} mph · ${Math.round(
     direction,

@@ -114,6 +114,14 @@ const DBOFS_COARSE_ETA_STRIDE = 24;
 const DBOFS_COARSE_XI_STRIDE = 6;
 const DBOFS_MAX_GRID_DISTANCE_MILES = 15;
 
+/*
+ * Current arrows visualize the current AT the selected fishing spot.
+ * Keep them in a small local footprint so zooming out does not imply
+ * that one spot's vector applies across an entire bay or coastline.
+ */
+const CURRENT_DISPLAY_RADIUS_MILES = 2;
+const CURRENT_DISPLAY_DENSITY = 5;
+
 export async function GET(request: NextRequest) {
   const latitude = parseNumber(
     request.nextUrl.searchParams.get("latitude"),
@@ -334,7 +342,7 @@ async function fetchFlowData(
 }
 
 async function fetchDbofsFlowData(
-  requestedPoints: RequestedPoint[],
+  _requestedPoints: RequestedPoint[],
   center: RequestedPoint,
 ): Promise<FlowFetchResult> {
   const [gridPoint, timeInfo] =
@@ -407,13 +415,20 @@ async function fetchDbofsFlowData(
     );
   }
 
+  const currentDisplayPoints =
+    buildGrid(
+      center.latitude,
+      center.longitude,
+      CURRENT_DISPLAY_RADIUS_MILES,
+      CURRENT_DISPLAY_DENSITY,
+    );
   const waterMask =
     await fetchWaterMask(
-      requestedPoints,
+      currentDisplayPoints,
     );
 
   const points =
-    requestedPoints
+    currentDisplayPoints
       .map((point, index) =>
         waterMask[index]
           ? {
@@ -1392,7 +1407,7 @@ function distanceMiles(
 }
 
 async function fetchOpenMeteoRegionalCurrent(
-  requestedPoints: RequestedPoint[],
+  _requestedPoints: RequestedPoint[],
   fishingSpot: RequestedPoint,
 ): Promise<FlowPoint[]> {
   /*
@@ -1425,6 +1440,14 @@ async function fetchOpenMeteoRegionalCurrent(
     "sea",
   );
 
+  const currentDisplayPoints =
+    buildGrid(
+      fishingSpot.latitude,
+      fishingSpot.longitude,
+      CURRENT_DISPLAY_RADIUS_MILES,
+      CURRENT_DISPLAY_DENSITY,
+    );
+
   const [response, waterMask] =
     await Promise.all([
       fetch(url, {
@@ -1437,7 +1460,7 @@ async function fetchOpenMeteoRegionalCurrent(
         },
       }),
       fetchWaterMask(
-        requestedPoints,
+        currentDisplayPoints,
       ),
     ]);
 
@@ -1481,7 +1504,7 @@ async function fetchOpenMeteoRegionalCurrent(
     );
   }
 
-  return requestedPoints
+  return currentDisplayPoints
     .map((point, index) =>
       waterMask[index]
         ? {
