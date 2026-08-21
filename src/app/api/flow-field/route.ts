@@ -9,6 +9,13 @@ type RequestedPoint = {
   longitude: number;
 };
 
+type ViewportBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
 type OpenMeteoPoint = {
   latitude?: number;
   longitude?: number;
@@ -44,6 +51,8 @@ type FlowFetchResult = {
   points: FlowPoint[];
   source: FlowSourceInfo;
   forecast: FlowForecastPoint[];
+  spotCurrent?: FlowPoint;
+  spotSource?: FlowSourceInfo;
 };
 
 type DbofsGridPoint = {
@@ -114,13 +123,21 @@ const DBOFS_COARSE_ETA_STRIDE = 24;
 const DBOFS_COARSE_XI_STRIDE = 6;
 const DBOFS_MAX_GRID_DISTANCE_MILES = 15;
 
-/*
- * Current arrows visualize the current AT the selected fishing spot.
- * Keep them in a small local footprint so zooming out does not imply
- * that one spot's vector applies across an entire bay or coastline.
- */
-const CURRENT_DISPLAY_RADIUS_MILES = 2;
-const CURRENT_DISPLAY_DENSITY = 5;
+const OPEN_METEO_CURRENT_SOURCE: FlowSourceInfo = {
+  id: "open-meteo",
+  label: "Open-Meteo",
+  detail:
+    "Global ocean-current field",
+  resolution: "~8 km",
+};
+
+const DBOFS_SOURCE: FlowSourceInfo = {
+  id: "noaa-dbofs",
+  label: "NOAA DBOFS",
+  detail:
+    "Delaware Bay high-resolution hydrodynamic model",
+  resolution: "~100 m–3 km",
+};
 
 export async function GET(request: NextRequest) {
   const latitude = parseNumber(
@@ -137,6 +154,10 @@ export async function GET(request: NextRequest) {
     parseNumber(
       request.nextUrl.searchParams.get("spotLongitude"),
     ) ?? longitude;
+  const viewportBounds =
+    parseViewportBounds(
+      request.nextUrl.searchParams,
+    );
   const requestedMode =
     request.nextUrl.searchParams.get("mode");
   const mode: FlowMode =
@@ -201,12 +222,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const grid = buildGrid(
-    latitude,
-    longitude,
-    radiusMiles,
-    density,
-  );
+  const grid =
+    mode === "current" &&
+    viewportBounds
+      ? buildViewportGrid(
+          viewportBounds,
+          density,
+        )
+      : buildGrid(
+          latitude,
+          longitude,
+          radiusMiles,
+          density,
+        );
 
   try {
     const flow = await fetchFlowData(
@@ -254,6 +282,10 @@ export async function GET(request: NextRequest) {
           maximum: Math.max(...speeds),
         },
         source: flow.source,
+        spotSource:
+          flow.spotSource,
+        spotCurrent:
+          flow.spotCurrent,
         forecast: flow.forecast,
         points,
       },
@@ -285,70 +317,113 @@ export async function GET(request: NextRequest) {
 async function fetchFlowData(
   requestedPoints: RequestedPoint[],
   mode: FlowMode,
-  center: RequestedPoint,
+  fishingSpot: RequestedPoint,
 ): Promise<FlowFetchResult> {
+  if (mode !== "current") {
+    const points =
+      await fetchFlowPoints(
+        requestedPoints,
+        mode,
+      );
+    const source: FlowSourceInfo = {
+      id: "open-meteo",
+      label: "Open-Meteo",
+      detail: "Weather forecast",
+      resolution: "forecast grid",
+    };
+
+    return {
+      points,
+      source,
+      forecast: [],
+    };
+  }
+
+  /*
+   * The visible current field is sampled independently at each map
+   * location. This lets a zoomed-out view show the bay, cape, and
+   * offshore water moving differently instead of copying the saved
+   * fishing spot's vector over the whole map.
+   */
+  const fieldPromise =
+    fetchFlowPoints(
+      requestedPoints,
+      "current",
+    );
+
   if (
-    mode === "current" &&
-    isLikelyDbofsLocation(center)
+    isLikelyDbofsLocation(
+      fishingSpot,
+    )
   ) {
     try {
-      return await fetchDbofsFlowData(
-        requestedPoints,
-        center,
-      );
-    } catch (error) {
       /*
-       * DBOFS is the preferred Delaware Bay source, but current
-       * guidance should not disappear if NOAA's THREDDS/OPeNDAP
-       * service is slow or temporarily unavailable.
+       * DBOFS remains our preferred point/forecast source in Delaware
+       * Bay. The animated viewport field currently comes from
+       * Open-Meteo because it can batch arbitrary visible coordinates.
        */
+      const [
+        dbofs,
+        fieldPoints,
+      ] = await Promise.all([
+        fetchDbofsSpotData(
+          fishingSpot,
+        ),
+        fieldPromise,
+      ]);
+
+      return {
+        points:
+          fieldPoints,
+        source:
+          OPEN_METEO_CURRENT_SOURCE,
+        spotCurrent:
+          dbofs.spotCurrent,
+        spotSource:
+          DBOFS_SOURCE,
+        forecast:
+          dbofs.forecast,
+      };
+    } catch (error) {
       console.warn(
-        "NOAA DBOFS unavailable; using Open-Meteo current fallback.",
+        "NOAA DBOFS unavailable; using Open-Meteo for spot current.",
         error,
       );
     }
   }
 
-  const points =
-    mode === "current"
-      ? await fetchOpenMeteoRegionalCurrent(
-          requestedPoints,
-          center,
-        )
-      : await fetchFlowPoints(
-          requestedPoints,
-          mode,
-        );
+  const [
+    fieldPoints,
+    spotCurrent,
+  ] = await Promise.all([
+    fieldPromise,
+    fetchOpenMeteoSpotCurrent(
+      fishingSpot,
+    ),
+  ]);
 
   return {
-    points,
+    points:
+      fieldPoints,
     source:
-      mode === "current"
-        ? {
-            id: "open-meteo",
-            label: "Open-Meteo",
-            detail:
-              "Global ocean-current fallback",
-            resolution: "~8 km",
-          }
-        : {
-            id: "open-meteo",
-            label: "Open-Meteo",
-            detail: "Weather forecast",
-            resolution: "forecast grid",
-          },
+      OPEN_METEO_CURRENT_SOURCE,
+    spotCurrent,
+    spotSource:
+      OPEN_METEO_CURRENT_SOURCE,
     forecast: [],
   };
 }
 
-async function fetchDbofsFlowData(
-  _requestedPoints: RequestedPoint[],
-  center: RequestedPoint,
-): Promise<FlowFetchResult> {
+async function fetchDbofsSpotData(
+  fishingSpot: RequestedPoint,
+): Promise<{
+  spotCurrent: FlowPoint;
+  forecast: FlowForecastPoint[];
+}> {
   const [gridPoint, timeInfo] =
     await Promise.all([
       findNearestDbofsWaterPoint(
-        center,
+        fishingSpot,
       ),
       fetchDbofsTimeInfo(),
     ]);
@@ -385,12 +460,6 @@ async function fetchDbofsFlowData(
     );
   }
 
-  /*
-   * Pull the current hour plus six forecast hours at the selected
-   * model cell. The widget uses the first vector now; the remaining
-   * vectors are returned so a direction/speed forecast UI can be
-   * added without changing the backend again.
-   */
   const endIndex = Math.min(
     nowIndex + 6,
     timeInfo.validTimes.length - 1,
@@ -402,53 +471,14 @@ async function fetchDbofsFlowData(
       endIndex,
     );
 
-  if (vectors.length === 0) {
+  const currentVector =
+    vectors[0];
+
+  if (!currentVector) {
     throw new Error(
       "DBOFS did not return a usable surface-current vector.",
     );
   }
-
-  const currentVector = vectors[0];
-  if (!currentVector) {
-    throw new Error(
-      "DBOFS current vector is missing.",
-    );
-  }
-
-  const currentDisplayPoints =
-    buildGrid(
-      center.latitude,
-      center.longitude,
-      CURRENT_DISPLAY_RADIUS_MILES,
-      CURRENT_DISPLAY_DENSITY,
-    );
-  const waterMask =
-    await fetchWaterMask(
-      currentDisplayPoints,
-    );
-
-  const points =
-    currentDisplayPoints
-      .map((point, index) =>
-        waterMask[index]
-          ? {
-              latitude:
-                point.latitude,
-              longitude:
-                point.longitude,
-              speedMph:
-                currentVector.speedMph,
-              directionDegrees:
-                currentVector.directionDegrees,
-            }
-          : null,
-      )
-      .filter(
-        (
-          point,
-        ): point is FlowPoint =>
-          point !== null,
-      );
 
   const forecast =
     vectors.map(
@@ -466,13 +496,15 @@ async function fetchDbofsFlowData(
     );
 
   return {
-    points,
-    source: {
-      id: "noaa-dbofs",
-      label: "NOAA DBOFS",
-      detail:
-        "Delaware Bay high-resolution hydrodynamic model",
-      resolution: "~100 m–3 km",
+    spotCurrent: {
+      latitude:
+        fishingSpot.latitude,
+      longitude:
+        fishingSpot.longitude,
+      speedMph:
+        currentVector.speedMph,
+      directionDegrees:
+        currentVector.directionDegrees,
     },
     forecast,
   };
@@ -1406,16 +1438,9 @@ function distanceMiles(
   );
 }
 
-async function fetchOpenMeteoRegionalCurrent(
-  _requestedPoints: RequestedPoint[],
+async function fetchOpenMeteoSpotCurrent(
   fishingSpot: RequestedPoint,
-): Promise<FlowPoint[]> {
-  /*
-   * The reported current at the saved fishing spot must not depend
-   * on map zoom. Query Open-Meteo once at that exact spot and use
-   * the resulting coarse (~8 km) model vector only as a regional
-   * estimate. The visualization grid controls arrow placement only.
-   */
+): Promise<FlowPoint> {
   const url =
     new URL(MARINE_URL);
 
@@ -1440,29 +1465,16 @@ async function fetchOpenMeteoRegionalCurrent(
     "sea",
   );
 
-  const currentDisplayPoints =
-    buildGrid(
-      fishingSpot.latitude,
-      fishingSpot.longitude,
-      CURRENT_DISPLAY_RADIUS_MILES,
-      CURRENT_DISPLAY_DENSITY,
-    );
-
-  const [response, waterMask] =
-    await Promise.all([
-      fetch(url, {
-        headers: {
-          Accept:
-            "application/json",
-        },
-        next: {
-          revalidate: 900,
-        },
-      }),
-      fetchWaterMask(
-        currentDisplayPoints,
-      ),
-    ]);
+  const response =
+    await fetch(url, {
+      headers: {
+        Accept:
+          "application/json",
+      },
+      next: {
+        revalidate: 900,
+      },
+    });
 
   if (!response.ok) {
     throw new Error(
@@ -1474,7 +1486,6 @@ async function fetchOpenMeteoRegionalCurrent(
     (await response.json()) as
       | OpenMeteoPoint
       | OpenMeteoPoint[];
-
   const raw =
     Array.isArray(payload)
       ? payload[0]
@@ -1486,45 +1497,20 @@ async function fetchOpenMeteoRegionalCurrent(
     );
   }
 
-  /*
-   * Do not apply the land/water display mask to the fishing marker
-   * itself. A shore-based fishing spot can be on land while the
-   * marine API intentionally resolves it to the nearest sea cell.
-   */
-  const representative =
+  const normalized =
     normalizePoint(
       raw,
       fishingSpot,
       "current",
     );
 
-  if (!representative) {
+  if (!normalized) {
     throw new Error(
       "Open-Meteo current direction/speed is unavailable at the fishing spot.",
     );
   }
 
-  return currentDisplayPoints
-    .map((point, index) =>
-      waterMask[index]
-        ? {
-            latitude:
-              point.latitude,
-            longitude:
-              point.longitude,
-            speedMph:
-              representative.speedMph,
-            directionDegrees:
-              representative.directionDegrees,
-          }
-        : null,
-    )
-    .filter(
-      (
-        point,
-      ): point is FlowPoint =>
-        point !== null,
-    );
+  return normalized;
 }
 
 async function fetchFlowPoints(
@@ -2125,6 +2111,186 @@ function normalizePoint(
     speedMph: speedKmh * 0.621371,
     directionDegrees,
   };
+}
+
+function parseViewportBounds(
+  searchParams: URLSearchParams,
+): ViewportBounds | null {
+  const north =
+    parseNumber(
+      searchParams.get("north"),
+    );
+  const south =
+    parseNumber(
+      searchParams.get("south"),
+    );
+  const east =
+    parseNumber(
+      searchParams.get("east"),
+    );
+  const west =
+    parseNumber(
+      searchParams.get("west"),
+    );
+
+  if (
+    north === null ||
+    south === null ||
+    east === null ||
+    west === null ||
+    north <= south ||
+    north < -90 ||
+    north > 90 ||
+    south < -90 ||
+    south > 90
+  ) {
+    return null;
+  }
+
+  const longitudeSpan =
+    east - west;
+
+  if (
+    !Number.isFinite(
+      longitudeSpan,
+    ) ||
+    longitudeSpan <= 0 ||
+    longitudeSpan > 360
+  ) {
+    return null;
+  }
+
+  return {
+    north,
+    south,
+    east,
+    west,
+  };
+}
+
+function buildViewportGrid(
+  bounds: ViewportBounds,
+  density: number,
+): RequestedPoint[] {
+  const centerLatitude =
+    (bounds.north +
+      bounds.south) /
+    2;
+  const heightMiles =
+    Math.max(
+      0.1,
+      (bounds.north -
+        bounds.south) *
+        69,
+    );
+  const widthMiles =
+    Math.max(
+      0.1,
+      (bounds.east -
+        bounds.west) *
+        Math.max(
+          12,
+          69 *
+            Math.cos(
+              centerLatitude *
+                (Math.PI / 180),
+            ),
+        ),
+    );
+  const aspectRatio =
+    widthMiles /
+    heightMiles;
+
+  /*
+   * Keep roughly 18–42 model samples visible regardless of zoom.
+   * More geographic area means wider spacing between samples, which
+   * is appropriate for Open-Meteo's coarse ~8 km current grid.
+   */
+  const targetCount =
+    density >= 7
+      ? 42
+      : density <= 3
+        ? 18
+        : 30;
+  const columns =
+    Math.round(
+      clamp(
+        Math.sqrt(
+          targetCount *
+            aspectRatio,
+        ),
+        4,
+        8,
+      ),
+    );
+  const rows =
+    Math.round(
+      clamp(
+        targetCount /
+          columns,
+        3,
+        7,
+      ),
+    );
+
+  const points:
+    RequestedPoint[] = [];
+
+  for (
+    let row = 0;
+    row < rows;
+    row += 1
+  ) {
+    const y =
+      rows === 1
+        ? 0.5
+        : row /
+          (rows - 1);
+    const latitude =
+      bounds.north -
+      y *
+        (bounds.north -
+          bounds.south);
+    const offset =
+      row % 2 === 1
+        ? 0.5
+        : 0;
+
+    for (
+      let column = 0;
+      column < columns;
+      column += 1
+    ) {
+      const x =
+        (column + offset) /
+        Math.max(
+          1,
+          columns - 1,
+        );
+
+      if (x > 1) {
+        continue;
+      }
+
+      points.push({
+        latitude:
+          clamp(
+            latitude,
+            -89.9,
+            89.9,
+          ),
+        longitude:
+          wrapLongitude(
+            bounds.west +
+              x *
+                (bounds.east -
+                  bounds.west),
+          ),
+      });
+    }
+  }
+
+  return points;
 }
 
 function buildGrid(

@@ -42,6 +42,13 @@ type FlowFieldData = {
     detail: string;
     resolution: string;
   };
+  spotSource?: {
+    id: "noaa-dbofs" | "open-meteo";
+    label: string;
+    detail: string;
+    resolution: string;
+  };
+  spotCurrent?: FlowPoint;
   forecast?: Array<{
     validAt: string;
     speedMph: number;
@@ -71,6 +78,13 @@ type Camera = {
 type ViewportSize = {
   width: number;
   height: number;
+};
+
+type ViewportBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
 };
 
 type MapTile = {
@@ -186,6 +200,13 @@ export function FlowVisualizationWidget({
     useState<FlowState>({
       status: "loading",
     });
+  const [
+    viewportBounds,
+    setViewportBounds,
+  ] =
+    useState<ViewportBounds | null>(
+      null,
+    );
 
   useEffect(() => {
     setMode(configuredMode);
@@ -214,6 +235,36 @@ export function FlowVisualizationWidget({
         density:
           density.toString(),
       });
+
+    if (
+      mode === "current" &&
+      viewportBounds
+    ) {
+      search.set(
+        "north",
+        viewportBounds.north.toFixed(
+          5,
+        ),
+      );
+      search.set(
+        "south",
+        viewportBounds.south.toFixed(
+          5,
+        ),
+      );
+      search.set(
+        "east",
+        viewportBounds.east.toFixed(
+          5,
+        ),
+      );
+      search.set(
+        "west",
+        viewportBounds.west.toFixed(
+          5,
+        ),
+      );
+    }
 
     setFlowState({
       status: "loading",
@@ -277,6 +328,7 @@ export function FlowVisualizationWidget({
     mode,
     viewLatitude,
     viewLongitude,
+    viewportBounds,
   ]);
 
   const data =
@@ -285,6 +337,7 @@ export function FlowVisualizationWidget({
       : null;
 
   const representativePoint =
+    data?.spotCurrent ??
     data?.forecast?.[0] ??
     findNearestFlowPoint(
       data?.points ?? [],
@@ -387,6 +440,19 @@ export function FlowVisualizationWidget({
               nextCamera.bearing,
           });
         }}
+        onViewportBoundsChange={(
+          nextBounds,
+        ) => {
+          setViewportBounds(
+            (currentBounds) =>
+              boundsAlmostEqual(
+                currentBounds,
+                nextBounds,
+              )
+                ? currentBounds
+                : nextBounds,
+          );
+        }}
       />
 
       <div className="absolute left-2 top-2 z-30 flex items-center gap-1">
@@ -449,10 +515,8 @@ export function FlowVisualizationWidget({
           className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] text-slate-700 shadow"
           title={`${data.source.detail} · ${data.source.resolution}`}
         >
-          {data.source.id ===
-          "open-meteo" &&
-          mode === "current"
-            ? "Open-Meteo · regional"
+          {mode === "current"
+            ? `${data.source.label} field`
             : data.source.label}
         </div>
       ) : null}
@@ -475,6 +539,7 @@ function FlowMap({
   showDepth,
   onLocationChange,
   onCameraChange,
+  onViewportBoundsChange,
 }: {
   spotLatitude: number;
   spotLongitude: number;
@@ -488,6 +553,9 @@ function FlowMap({
   ) => void;
   onCameraChange: (
     camera: Camera,
+  ) => void;
+  onViewportBoundsChange: (
+    bounds: ViewportBounds,
   ) => void;
 }) {
   const viewportRef =
@@ -562,6 +630,26 @@ function FlowMap({
     camera.latitude,
     camera.longitude,
     camera.zoom,
+  ]);
+
+  useEffect(() => {
+    const bounds =
+      calculateViewportBounds(
+        camera,
+        viewportSize,
+      );
+
+    onViewportBoundsChange(
+      bounds,
+    );
+  }, [
+    camera.bearing,
+    camera.latitude,
+    camera.longitude,
+    camera.zoom,
+    onViewportBoundsChange,
+    viewportSize.height,
+    viewportSize.width,
   ]);
 
   useEffect(() => {
@@ -1114,55 +1202,64 @@ function FlowMap({
               )
             : null}
 
-          {projectedFlowPoints.map(
-            (point) => {
-              const ratio =
-                clamp(
-                  point.speedMph /
-                    maximumSpeed,
-                  0,
-                  1,
-                );
-              const size =
-                18 +
-                ratio * 12;
-              const opacity =
-                0.55 +
-                ratio * 0.4;
+          {data?.mode ===
+          "current" ? (
+            <FlowStreakField
+              points={
+                projectedFlowPoints
+              }
+            />
+          ) : (
+            projectedFlowPoints.map(
+              (point) => {
+                const ratio =
+                  clamp(
+                    point.speedMph /
+                      maximumSpeed,
+                    0,
+                    1,
+                  );
+                const size =
+                  18 +
+                  ratio * 12;
+                const opacity =
+                  0.55 +
+                  ratio * 0.4;
 
-              return (
-                <div
-                  key={[
-                    point.latitude.toFixed(
-                      5,
-                    ),
-                    point.longitude.toFixed(
-                      5,
-                    ),
-                  ].join(":")}
-                  className="pointer-events-none absolute flex items-center justify-center font-extrabold text-[#087f8c]"
-                  style={{
-                    left:
-                      point.position.x,
-                    top:
-                      point.position.y,
-                    width: size,
-                    height: size,
-                    fontSize: size,
-                    lineHeight: 1,
-                    opacity,
-                    textShadow:
-                      "0 1px 2px rgba(255,255,255,.95)",
-                    transform:
-                      `translate(-50%, -50%) rotate(${point.directionDegrees}deg)`,
-                    transformOrigin:
-                      "center",
-                  }}
-                >
-                  ↑
-                </div>
-              );
-            },
+                return (
+                  <div
+                    key={[
+                      point.latitude.toFixed(
+                        5,
+                      ),
+                      point.longitude.toFixed(
+                        5,
+                      ),
+                    ].join(":")}
+                    className="pointer-events-none absolute flex items-center justify-center font-extrabold text-[#087f8c]"
+                    style={{
+                      left:
+                        point.position.x,
+                      top:
+                        point.position.y,
+                      width: size,
+                      height: size,
+                      fontSize: size,
+                      lineHeight: 1,
+                      opacity,
+                      textShadow:
+                        "0 1px 2px rgba(255,255,255,.95)",
+                      transform:
+                        `translate(-50%, -50%) rotate(${point.directionDegrees}deg)`,
+                      transformOrigin:
+                        "center",
+                    }}
+                  >
+                    ↑
+                  </div>
+                );
+              },
+            )
           )}
 
           <div
@@ -1247,6 +1344,138 @@ function FlowMap({
           ? " · NOAA BlueTopo"
           : ""}
       </div>
+    </>
+  );
+}
+
+function FlowStreakField({
+  points,
+}: {
+  points: Array<
+    FlowPoint & {
+      position: {
+        x: number;
+        y: number;
+      };
+    }
+  >;
+}) {
+  return (
+    <>
+      <style>{`
+        @keyframes tidehawk-current-streak {
+          0% {
+            transform: translateY(12px) scaleY(.45);
+            opacity: 0;
+          }
+          18% {
+            opacity: .82;
+          }
+          72% {
+            opacity: .72;
+          }
+          100% {
+            transform: translateY(-26px) scaleY(1);
+            opacity: 0;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .tidehawk-current-streak {
+            animation: none !important;
+            opacity: .65 !important;
+          }
+        }
+      `}</style>
+
+      {points.flatMap(
+        (point, pointIndex) => {
+          const speed =
+            Math.max(
+              0,
+              point.speedMph,
+            );
+          const duration =
+            clamp(
+              2.8 -
+                speed * 0.75,
+              0.9,
+              2.8,
+            );
+          const lineHeight =
+            9 +
+            clamp(
+              speed * 5,
+              0,
+              9,
+            );
+
+          return [0, 1].map(
+            (particleIndex) => {
+              const lateralOffset =
+                particleIndex === 0
+                  ? -4
+                  : 4;
+              const delay =
+                -(
+                  pointIndex *
+                    0.137 +
+                  particleIndex *
+                    duration /
+                    2
+                );
+
+              return (
+                <div
+                  key={[
+                    point.latitude.toFixed(
+                      5,
+                    ),
+                    point.longitude.toFixed(
+                      5,
+                    ),
+                    particleIndex,
+                  ].join(":")}
+                  className="pointer-events-none absolute"
+                  style={{
+                    left:
+                      point.position.x,
+                    top:
+                      point.position.y,
+                    transform:
+                      `translate(-50%, -50%) rotate(${point.directionDegrees}deg)`,
+                    transformOrigin:
+                      "center",
+                  }}
+                >
+                  <span
+                    className="tidehawk-current-streak absolute block w-[2px] rounded-full bg-[#087f8c] shadow-[0_0_2px_rgba(255,255,255,.9)]"
+                    style={{
+                      height:
+                        lineHeight,
+                      left:
+                        lateralOffset,
+                      top:
+                        -lineHeight /
+                        2,
+                      animationName:
+                        "tidehawk-current-streak",
+                      animationDuration:
+                        `${duration}s`,
+                      animationTimingFunction:
+                        "linear",
+                      animationIterationCount:
+                        "infinite",
+                      animationDelay:
+                        `${delay}s`,
+                    }}
+                  />
+                </div>
+              );
+            },
+          );
+        },
+      )}
     </>
   );
 }
@@ -1444,6 +1673,108 @@ function projectToViewport(
       point.y -
       centerWorld.y,
   };
+}
+
+function calculateViewportBounds(
+  camera: Camera,
+  viewport: ViewportSize,
+): ViewportBounds {
+  const corners = [
+    [0, 0],
+    [viewport.width, 0],
+    [viewport.width, viewport.height],
+    [0, viewport.height],
+  ] as const;
+
+  const positions =
+    corners.map(
+      ([x, y]) =>
+        screenPointToLngLat(
+          x,
+          y,
+          camera,
+          viewport,
+        ),
+    );
+  const latitudes =
+    positions.map(
+      (position) =>
+        position.latitude,
+    );
+  const unwrappedLongitudes =
+    positions.map(
+      (position) =>
+        unwrapLongitudeAround(
+          position.longitude,
+          camera.longitude,
+        ),
+    );
+
+  return {
+    north:
+      Math.max(...latitudes),
+    south:
+      Math.min(...latitudes),
+    east:
+      Math.max(
+        ...unwrappedLongitudes,
+      ),
+    west:
+      Math.min(
+        ...unwrappedLongitudes,
+      ),
+  };
+}
+
+function unwrapLongitudeAround(
+  longitude: number,
+  reference: number,
+): number {
+  let delta =
+    longitude - reference;
+
+  while (delta > 180) {
+    delta -= 360;
+  }
+
+  while (delta < -180) {
+    delta += 360;
+  }
+
+  return reference + delta;
+}
+
+function boundsAlmostEqual(
+  current:
+    | ViewportBounds
+    | null,
+  next: ViewportBounds,
+): boolean {
+  if (!current) {
+    return false;
+  }
+
+  const tolerance =
+    0.0005;
+
+  return (
+    Math.abs(
+      current.north -
+        next.north,
+    ) < tolerance &&
+    Math.abs(
+      current.south -
+        next.south,
+    ) < tolerance &&
+    Math.abs(
+      current.east -
+        next.east,
+    ) < tolerance &&
+    Math.abs(
+      current.west -
+        next.west,
+    ) < tolerance
+  );
 }
 
 function screenPointToLngLat(
