@@ -301,21 +301,19 @@ async function fetchFlowData(
     }
   }
 
-  const points = await fetchFlowPoints(
-    requestedPoints,
-    mode,
-  );
-
-  const displayPoints =
+  const points =
     mode === "current"
-      ? makeRegionalFallbackField(
-          points,
+      ? await fetchOpenMeteoRegionalCurrent(
+          requestedPoints,
           center,
         )
-      : points;
+      : await fetchFlowPoints(
+          requestedPoints,
+          mode,
+        );
 
   return {
-    points: displayPoints,
+    points,
     source:
       mode === "current"
         ? {
@@ -333,60 +331,6 @@ async function fetchFlowData(
           },
     forecast: [],
   };
-}
-
-function makeRegionalFallbackField(
-  points: FlowPoint[],
-  fishingSpot: RequestedPoint,
-): FlowPoint[] {
-  if (points.length === 0) {
-    return points;
-  }
-
-  /*
-   * Open-Meteo's ocean-current field is coarse (~8 km). Drawing
-   * neighboring cells with sharply different arrows makes the map
-   * look precise when it is not. Use the model vector nearest the
-   * selected fishing spot as a regional estimate, while preserving
-   * only the water positions from the display grid.
-   */
-  let representative =
-    points[0];
-
-  if (!representative) {
-    return points;
-  }
-
-  let nearestDistance =
-    distanceMiles(
-      fishingSpot.latitude,
-      fishingSpot.longitude,
-      representative.latitude,
-      representative.longitude,
-    );
-
-  for (const point of points.slice(1)) {
-    const distance =
-      distanceMiles(
-        fishingSpot.latitude,
-        fishingSpot.longitude,
-        point.latitude,
-        point.longitude,
-      );
-
-    if (distance < nearestDistance) {
-      representative = point;
-      nearestDistance = distance;
-    }
-  }
-
-  return points.map((point) => ({
-    ...point,
-    speedMph:
-      representative.speedMph,
-    directionDegrees:
-      representative.directionDegrees,
-  }));
 }
 
 async function fetchDbofsFlowData(
@@ -1445,6 +1389,119 @@ function distanceMiles(
       ),
     )
   );
+}
+
+async function fetchOpenMeteoRegionalCurrent(
+  requestedPoints: RequestedPoint[],
+  fishingSpot: RequestedPoint,
+): Promise<FlowPoint[]> {
+  /*
+   * The reported current at the saved fishing spot must not depend
+   * on map zoom. Query Open-Meteo once at that exact spot and use
+   * the resulting coarse (~8 km) model vector only as a regional
+   * estimate. The visualization grid controls arrow placement only.
+   */
+  const url =
+    new URL(MARINE_URL);
+
+  url.searchParams.set(
+    "latitude",
+    fishingSpot.latitude.toFixed(
+      5,
+    ),
+  );
+  url.searchParams.set(
+    "longitude",
+    fishingSpot.longitude.toFixed(
+      5,
+    ),
+  );
+  url.searchParams.set(
+    "current",
+    "ocean_current_velocity,ocean_current_direction",
+  );
+  url.searchParams.set(
+    "cell_selection",
+    "sea",
+  );
+
+  const [response, waterMask] =
+    await Promise.all([
+      fetch(url, {
+        headers: {
+          Accept:
+            "application/json",
+        },
+        next: {
+          revalidate: 900,
+        },
+      }),
+      fetchWaterMask(
+        requestedPoints,
+      ),
+    ]);
+
+  if (!response.ok) {
+    throw new Error(
+      `Open-Meteo returned ${response.status} ${response.statusText}.`,
+    );
+  }
+
+  const payload =
+    (await response.json()) as
+      | OpenMeteoPoint
+      | OpenMeteoPoint[];
+
+  const raw =
+    Array.isArray(payload)
+      ? payload[0]
+      : payload;
+
+  if (!raw) {
+    throw new Error(
+      "Open-Meteo did not return a current estimate for the fishing spot.",
+    );
+  }
+
+  /*
+   * Do not apply the land/water display mask to the fishing marker
+   * itself. A shore-based fishing spot can be on land while the
+   * marine API intentionally resolves it to the nearest sea cell.
+   */
+  const representative =
+    normalizePoint(
+      raw,
+      fishingSpot,
+      "current",
+    );
+
+  if (!representative) {
+    throw new Error(
+      "Open-Meteo current direction/speed is unavailable at the fishing spot.",
+    );
+  }
+
+  return requestedPoints
+    .map((point, index) =>
+      waterMask[index]
+        ? {
+            latitude:
+              point.latitude,
+            longitude:
+              point.longitude,
+            speedMph:
+              representative.speedMph,
+            directionDegrees:
+              representative.directionDegrees,
+          }
+        : null,
+    )
+    .filter(
+      (
+        point,
+      ): point is FlowPoint =>
+        point !== null,
+    );
 }
 
 async function fetchFlowPoints(
