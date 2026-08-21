@@ -67,6 +67,36 @@ const ELEVATION_URL =
   "https://api.open-meteo.com/v1/elevation";
 
 /*
+ * NOAA ENC depth-area polygons give us an actual charted-water mask
+ * instead of guessing "water" from terrain elevation. Using several
+ * ENC compilation scales keeps the mask useful from harbor detail
+ * out to broader coastal views.
+ */
+const NOAA_ENC_DEPTH_AREA_URLS = [
+  "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_harbour/MapServer/227/query",
+  "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_approach/MapServer/232/query",
+  "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_coastal/MapServer/166/query",
+  "https://encdirect.noaa.gov/arcgis/rest/services/encdirect/enc_general/MapServer/117/query",
+] as const;
+
+type GeoJsonPolygonGeometry =
+  | {
+      type: "Polygon";
+      coordinates: number[][][];
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: number[][][][];
+    };
+
+type GeoJsonFeatureCollection = {
+  type?: string;
+  features?: Array<{
+    geometry?: GeoJsonPolygonGeometry | null;
+  }>;
+};
+
+/*
  * NOAA publishes a continuously updated FMRC "best" DBOFS time
  * series. It automatically selects data from the most recent model
  * run available for each forecast time, which saves TideHawk from
@@ -1517,29 +1547,405 @@ async function fetchFlowPoints(
 async function fetchWaterMask(
   requestedPoints: RequestedPoint[],
 ): Promise<boolean[]> {
-  const url = new URL(ELEVATION_URL);
+  /*
+   * Prefer NOAA ENC charted depth-area polygons. This avoids the
+   * Cape May problem where beaches, marshes, roads, and wetlands can
+   * all sit close enough to sea level that an elevation threshold
+   * incorrectly labels them as water.
+   */
+  try {
+    const encMask =
+      await fetchNoaaEncWaterMask(
+        requestedPoints,
+      );
+
+    if (encMask) {
+      return encMask;
+    }
+  } catch (error) {
+    console.warn(
+      "NOAA ENC water mask unavailable; using elevation fallback.",
+      error,
+    );
+  }
+
+  return fetchElevationWaterMask(
+    requestedPoints,
+  );
+}
+
+async function fetchNoaaEncWaterMask(
+  requestedPoints: RequestedPoint[],
+): Promise<boolean[] | null> {
+  if (
+    requestedPoints.length === 0
+  ) {
+    return [];
+  }
+
+  const longitudes =
+    requestedPoints.map(
+      (point) =>
+        point.longitude,
+    );
+  const latitudes =
+    requestedPoints.map(
+      (point) =>
+        point.latitude,
+    );
+
+  /*
+   * Add a small buffer so polygons touching the outermost arrow
+   * points are still returned by the spatial query.
+   */
+  const longitudePadding =
+    0.01;
+  const latitudePadding =
+    0.01;
+  const minimumLongitude =
+    Math.min(...longitudes) -
+    longitudePadding;
+  const maximumLongitude =
+    Math.max(...longitudes) +
+    longitudePadding;
+  const minimumLatitude =
+    Math.min(...latitudes) -
+    latitudePadding;
+  const maximumLatitude =
+    Math.max(...latitudes) +
+    latitudePadding;
+
+  const geometry =
+    [
+      minimumLongitude,
+      minimumLatitude,
+      maximumLongitude,
+      maximumLatitude,
+    ].join(",");
+
+  const results =
+    await Promise.allSettled(
+      NOAA_ENC_DEPTH_AREA_URLS.map(
+        async (endpoint) => {
+          const url =
+            new URL(endpoint);
+
+          url.searchParams.set(
+            "where",
+            "1=1",
+          );
+          url.searchParams.set(
+            "geometry",
+            geometry,
+          );
+          url.searchParams.set(
+            "geometryType",
+            "esriGeometryEnvelope",
+          );
+          url.searchParams.set(
+            "inSR",
+            "4326",
+          );
+          url.searchParams.set(
+            "spatialRel",
+            "esriSpatialRelIntersects",
+          );
+          url.searchParams.set(
+            "outFields",
+            "OBJECTID",
+          );
+          url.searchParams.set(
+            "returnGeometry",
+            "true",
+          );
+          url.searchParams.set(
+            "outSR",
+            "4326",
+          );
+          url.searchParams.set(
+            "geometryPrecision",
+            "6",
+          );
+          url.searchParams.set(
+            "f",
+            "geojson",
+          );
+
+          const response =
+            await fetch(url, {
+              headers: {
+                Accept:
+                  "application/geo+json,application/json",
+              },
+              next: {
+                revalidate:
+                  86400,
+              },
+            });
+
+          if (!response.ok) {
+            throw new Error(
+              `NOAA ENC returned ${response.status} ${response.statusText}.`,
+            );
+          }
+
+          const payload =
+            (await response.json()) as
+              GeoJsonFeatureCollection;
+
+          return (
+            payload.features ?? []
+          )
+            .map(
+              (feature) =>
+                feature.geometry,
+            )
+            .filter(
+              (
+                geometry,
+              ): geometry is GeoJsonPolygonGeometry =>
+                geometry !== null &&
+                geometry !== undefined &&
+                (geometry.type ===
+                  "Polygon" ||
+                  geometry.type ===
+                    "MultiPolygon"),
+            );
+        },
+      ),
+    );
+
+  const geometries:
+    GeoJsonPolygonGeometry[] = [];
+  let successfulServiceCount = 0;
+
+  for (const result of results) {
+    if (
+      result.status ===
+      "fulfilled"
+    ) {
+      successfulServiceCount +=
+        1;
+      geometries.push(
+        ...result.value,
+      );
+    }
+  }
+
+  /*
+   * If every NOAA request failed, use the global fallback. If NOAA
+   * answered successfully but returned no depth-area polygons, the
+   * selected region is probably outside ENC coverage, so also fall
+   * back rather than hiding every arrow.
+   */
+  if (
+    successfulServiceCount ===
+      0 ||
+    geometries.length === 0
+  ) {
+    return null;
+  }
+
+  return requestedPoints.map(
+    (point) =>
+      geometries.some(
+        (geometry) =>
+          geoJsonGeometryContainsPoint(
+            geometry,
+            point.longitude,
+            point.latitude,
+          ),
+      ),
+  );
+}
+
+function geoJsonGeometryContainsPoint(
+  geometry: GeoJsonPolygonGeometry,
+  longitude: number,
+  latitude: number,
+): boolean {
+  if (
+    geometry.type ===
+    "Polygon"
+  ) {
+    return polygonContainsPoint(
+      geometry.coordinates,
+      longitude,
+      latitude,
+    );
+  }
+
+  return geometry.coordinates.some(
+    (polygon) =>
+      polygonContainsPoint(
+        polygon,
+        longitude,
+        latitude,
+      ),
+  );
+}
+
+function polygonContainsPoint(
+  rings: number[][][],
+  longitude: number,
+  latitude: number,
+): boolean {
+  const outerRing =
+    rings[0];
+
+  if (
+    !outerRing ||
+    !ringContainsPoint(
+      outerRing,
+      longitude,
+      latitude,
+    )
+  ) {
+    return false;
+  }
+
+  /*
+   * GeoJSON polygons list the exterior ring first and any holes
+   * afterward. A point inside a hole (island/land cutout) is not
+   * water.
+   */
+  for (
+    let index = 1;
+    index < rings.length;
+    index += 1
+  ) {
+    const hole =
+      rings[index];
+
+    if (
+      hole &&
+      ringContainsPoint(
+        hole,
+        longitude,
+        latitude,
+      )
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function ringContainsPoint(
+  ring: number[][],
+  longitude: number,
+  latitude: number,
+): boolean {
+  let inside = false;
+
+  for (
+    let current = 0,
+      previous =
+        ring.length - 1;
+    current < ring.length;
+    previous = current,
+      current += 1
+  ) {
+    const currentPoint =
+      ring[current];
+    const previousPoint =
+      ring[previous];
+
+    if (
+      !currentPoint ||
+      !previousPoint
+    ) {
+      continue;
+    }
+
+    const currentLongitude =
+      currentPoint[0];
+    const currentLatitude =
+      currentPoint[1];
+    const previousLongitude =
+      previousPoint[0];
+    const previousLatitude =
+      previousPoint[1];
+
+    if (
+      !isFiniteNumber(
+        currentLongitude,
+      ) ||
+      !isFiniteNumber(
+        currentLatitude,
+      ) ||
+      !isFiniteNumber(
+        previousLongitude,
+      ) ||
+      !isFiniteNumber(
+        previousLatitude,
+      )
+    ) {
+      continue;
+    }
+
+    const intersects =
+      (currentLatitude >
+        latitude) !==
+        (previousLatitude >
+          latitude) &&
+      longitude <
+        ((previousLongitude -
+          currentLongitude) *
+          (latitude -
+            currentLatitude)) /
+          (previousLatitude -
+            currentLatitude ||
+            Number.EPSILON) +
+          currentLongitude;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+async function fetchElevationWaterMask(
+  requestedPoints: RequestedPoint[],
+): Promise<boolean[]> {
+  const url =
+    new URL(ELEVATION_URL);
 
   url.searchParams.set(
     "latitude",
     requestedPoints
-      .map((point) => point.latitude.toFixed(5))
+      .map((point) =>
+        point.latitude.toFixed(
+          5,
+        ),
+      )
       .join(","),
   );
   url.searchParams.set(
     "longitude",
     requestedPoints
-      .map((point) => point.longitude.toFixed(5))
+      .map((point) =>
+        point.longitude.toFixed(
+          5,
+        ),
+      )
       .join(","),
   );
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-    },
-    next: {
-      revalidate: 86400,
-    },
-  });
+  const response =
+    await fetch(url, {
+      headers: {
+        Accept:
+          "application/json",
+      },
+      next: {
+        revalidate:
+          86400,
+      },
+    });
 
   if (!response.ok) {
     throw new Error(
@@ -1555,28 +1961,31 @@ async function fetchWaterMask(
   const elevations =
     payload.elevation;
 
-  if (!Array.isArray(elevations)) {
+  if (
+    !Array.isArray(
+      elevations,
+    )
+  ) {
     throw new Error(
       "Open-Meteo elevation did not return a usable land mask.",
     );
   }
 
-  /*
-   * Copernicus DEM reports open water at about sea level.
-   * A small +0.5 m tolerance keeps tiny interpolation noise from
-   * punching holes in the water while still removing ordinary
-   * beaches, roads, dunes, marsh islands, and inland terrain.
-   */
-  return requestedPoints.map((_, index) => {
-    const elevation =
-      elevations[index];
+  return requestedPoints.map(
+    (_, index) => {
+      const elevation =
+        elevations[index];
 
-    return (
-      typeof elevation === "number" &&
-      Number.isFinite(elevation) &&
-      elevation <= 0.5
-    );
-  });
+      return (
+        typeof elevation ===
+          "number" &&
+        Number.isFinite(
+          elevation,
+        ) &&
+        elevation <= 0.5
+      );
+    },
+  );
 }
 
 function normalizePoint(
